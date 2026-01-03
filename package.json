@@ -22,6 +22,7 @@
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.11",
+    "streamifier": "^0.1.1",
     "ua-parser-js": "^2.0.7"
   },
   "devDependencies": {
