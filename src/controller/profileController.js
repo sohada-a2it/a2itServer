@@ -64,6 +64,11 @@ exports.uploadProfilePicture = async (req, res) => {
       );
 
       streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+      console.log("☁️ CLOUDINARY CHECK");
+console.log("CLOUD_NAME:", process.env.CLOUDINARY_CLOUD_NAME);
+console.log("API_KEY:", process.env.CLOUDINARY_API_KEY ? "OK" : "MISSING");
+console.log("API_SECRET:", process.env.CLOUDINARY_API_SECRET ? "OK" : "MISSING");
+
     });
 
     // ✅ Save Cloudinary URL
