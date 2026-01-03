@@ -127,6 +127,7 @@ exports.getAttendanceRecords = async (req, res) => {
 };
 
 // ===================== Get User Summary =====================
+// ===================== Get User Summary =====================
 exports.getUserSummary = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -179,10 +180,28 @@ exports.getUserSummary = async (req, res) => {
               ] 
             } 
           },
-          daysHoliday: { 
+          daysWeeklyOff: { 
             $sum: { 
               $cond: [
-                { $in: ["$status", ["Govt Holiday", "Weekly Off"]] }, 
+                { $eq: ["$status", "Weekly Off"] }, 
+                1, 
+                0 
+              ] 
+            } 
+          },
+          daysGovtHoliday: { 
+            $sum: { 
+              $cond: [
+                { $eq: ["$status", "Govt Holiday"] }, 
+                1, 
+                0 
+              ] 
+            } 
+          },
+          daysOffDay: { 
+            $sum: { 
+              $cond: [
+                { $eq: ["$status", "Off Day"] }, 
                 1, 
                 0 
               ] 
@@ -207,12 +226,15 @@ exports.getUserSummary = async (req, res) => {
       daysPresent: 0,
       daysAbsent: 0,
       daysLeave: 0,
-      daysHoliday: 0,
+      daysWeeklyOff: 0,
+      daysGovtHoliday: 0,
+      daysOffDay: 0,
       lateArrivals: 0
     };
 
     // Calculate additional metrics
-    const workingDays = result.totalRecords - result.daysHoliday;
+    const nonWorkingDays = result.daysWeeklyOff + result.daysGovtHoliday + result.daysOffDay;
+    const workingDays = result.totalRecords - nonWorkingDays;
     const attendanceRate = workingDays > 0 
       ? (result.daysPresent / workingDays) * 100 
       : 0;
@@ -225,6 +247,7 @@ exports.getUserSummary = async (req, res) => {
       summary: {
         ...result,
         workingDays,
+        nonWorkingDays,
         attendanceRate: parseFloat(attendanceRate.toFixed(2)),
         averageHours: parseFloat(averageHours.toFixed(2))
       }
@@ -237,7 +260,7 @@ exports.getUserSummary = async (req, res) => {
     });
   }
 };
-
+ 
 // ===================== Clock In =====================
 exports.clockIn = async (req, res) => {
   try {
@@ -290,6 +313,20 @@ exports.clockIn = async (req, res) => {
       }
     }
 
+    // 4️⃣ Check if user is on leave
+    const user = await User.findById(userId);
+    if (user.leaveDays && user.leaveDays.length > 0) {
+      const leaveToday = user.leaveDays.some(leave => {
+        const leaveDate = new Date(leave.date);
+        leaveDate.setHours(0, 0, 0, 0);
+        return leaveDate.getTime() === today.getTime() && leave.status === "approved";
+      });
+      
+      if (leaveToday) {
+        attendanceStatus = "Leave";
+      }
+    }
+
     // Check if late (after 10:00 AM)
     const currentTime = new Date();
     const clockInTime = currentTime.getHours() * 60 + currentTime.getMinutes();
@@ -299,45 +336,54 @@ exports.clockIn = async (req, res) => {
       attendanceStatus = "Late";
     }
 
+    // Special case: If it's a holiday/weekly off/leave, don't require clock in
+    const isNonWorkingDay = ["Govt Holiday", "Weekly Off", "Leave"].includes(attendanceStatus);
+    
     if (!attendance) {
       attendance = new Attendance({
         employee: userId,
         date: today,
-        clockIn: timestamp ? new Date(timestamp) : new Date(),
+        clockIn: isNonWorkingDay ? null : (timestamp ? new Date(timestamp) : new Date()),
         status: attendanceStatus,
         ipAddress: req.ip,
         device: deviceInfo,
-        location: location || "Office"
+        location: location || "Office",
+        autoMarked: isNonWorkingDay // Flag to indicate auto-marked
       });
     } else {
-      attendance.clockIn = timestamp ? new Date(timestamp) : new Date();
+      attendance.clockIn = isNonWorkingDay ? null : (timestamp ? new Date(timestamp) : new Date());
       attendance.status = attendanceStatus;
       attendance.ipAddress = req.ip;
       attendance.device = deviceInfo;
       attendance.location = location || "Office";
+      attendance.autoMarked = isNonWorkingDay;
     }
 
     await attendance.save();
 
     await addSessionActivity({
       userId,
-      action: "Clocked In",
+      action: isNonWorkingDay ? "Auto-marked" : "Clocked In",
       target: attendance._id.toString(),
       details: {
         ip: req.ip,
         device: deviceInfo,
         dayStatus: attendanceStatus,
         location: location || "Office",
-        timestamp: attendance.clockIn
+        timestamp: attendance.clockIn,
+        autoMarked: isNonWorkingDay
       }
     });
 
     res.status(200).json({
       status: "success",
-      message: `Clocked in successfully (${attendanceStatus})`,
+      message: isNonWorkingDay 
+        ? `Auto-marked as ${attendanceStatus} (no clock in required)` 
+        : `Clocked in successfully (${attendanceStatus})`,
       attendance,
-      clockedIn: true,
-      clockedOut: false
+      clockedIn: !isNonWorkingDay && !!attendance.clockIn,
+      clockedOut: false,
+      autoMarked: isNonWorkingDay
     });
 
   } catch (error) {

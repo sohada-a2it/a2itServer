@@ -89,5 +89,26 @@ app.get('/', (req, res) => {
 app.use("*", (req, res) => {
   res.status(404).json({ message: "Route not found" });
 });
+// server.js or app.js এ
+const cron = require('node-cron');
 
+// Auto mark attendance at 9:00 AM every day
+cron.schedule('0 9 * * *', async () => {
+  console.log('🕘 Running daily auto attendance marking...');
+  try {
+    // Call your auto marking endpoint
+    // You can call the controller function directly or make HTTP request
+    const result = await attendanceController.autoMarkAttendance({}, {
+      status: (code) => ({ json: (data) => console.log('Auto-mark result:', data) })
+    });
+  } catch (error) {
+    console.error('Cron job error:', error);
+  }
+});
+
+// Alternatively, mark attendance at midnight
+cron.schedule('0 0 * * *', async () => {
+  console.log('🌙 Running midnight auto attendance marking...');
+  // Same implementation as above
+});
 module.exports = app;
