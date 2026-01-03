@@ -50,21 +50,21 @@ router.delete(
 
 // ====================Attendace Routes ====================  
 // Employee routes
-router.get('/today', auth, attendanceController.getTodayStatus);
-router.get('/records', auth, attendanceController.getAttendanceRecords);
-router.get('/summary', auth, attendanceController.getUserSummary);
-router.post('/clock-in', auth, attendanceController.clockIn);
-router.post('/clock-out', auth, attendanceController.clockOut);
-router.get('/:id', auth, attendanceController.getAttendanceById);
-router.get('/date-range', auth, attendanceController.getAttendanceByDateRange);
+router.get('/today', protect, attendanceController.getTodayStatus);
+router.get('/records', protect, attendanceController.getAttendanceRecords);
+router.get('/summary', protect, attendanceController.getUserSummary);
+router.post('/clock-in', protect, attendanceController.clockIn);
+router.post('/clock-out', protect, attendanceController.clockOut);
+router.get('/:id', protect, attendanceController.getAttendanceById);
+router.get('/date-range', protect, attendanceController.getAttendanceByDateRange);
 
 // Admin routes
-router.get('/admin/records', auth, adminAuth, attendanceController.getAllAttendanceRecords);
-router.get('/admin/summary', auth, adminAuth, attendanceController.getAllAttendanceSummary);
-router.put('/admin/correct', auth, adminAuth, attendanceController.adminCorrectAttendance);
-router.get('/admin/export', auth, adminAuth, attendanceController.exportAttendanceData);
-router.get('/admin/summary/:userId', auth, adminAuth, attendanceController.getAllAttendanceSummary);
-router.get('/admin/records/:userId', auth, adminAuth, attendanceController.getAllAttendanceRecords);
+router.get('/admin/records', protect, adminOnly, attendanceController.getAllAttendanceRecords);
+router.get('/admin/summary', protect, adminOnly, attendanceController.getAllAttendanceSummary);
+router.put('/admin/correct', protect, adminOnly, attendanceController.adminCorrectAttendance);
+router.get('/admin/export', protect, adminOnly, attendanceController.exportAttendanceData);
+router.get('/admin/summary/:userId', protect, adminOnly, attendanceController.getAllAttendanceSummary);
+router.get('/admin/records/:userId', protect, adminOnly, attendanceController.getAllAttendanceRecords);
  
 // ====================Payroll Routes(Admin Only) ==================== 
 router.post('/admin/payroll', protect,adminOnly,payrollController.createPayroll); 
