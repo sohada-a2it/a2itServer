@@ -66,67 +66,6 @@ router.get('/admin/export', protect, adminOnly, attendanceController.exportAtten
 router.get('/admin/summary/:userId', protect, adminOnly, attendanceController.getAllAttendanceSummary);
 router.get('/admin/records/:userId', protect, adminOnly, attendanceController.getAllAttendanceRecords);
  
-// ====================Payroll Routes(Admin Only) ==================== 
-// 🔹 Create payroll (auto calculation for one employee)
-router.post(
-  '/',
-  protect,
-  adminOnly,
-  payrollController.createPayroll
-);
-
-// 🔹 Get all payrolls (admin)
-router.get(
-  '/',
-  protect,
-  adminOnly,
-  payrollController.getAllPayrolls
-);
-
-// 🔹 Get payroll by ID
-router.get(
-  '/:id',
-  protect,
-  payrollController.getPayrollById
-);
-
-// 🔹 Update payroll status (admin)
-router.put(
-  '/:id/status',
-  protect,
-  adminOnly,
-  payrollController.updatePayrollStatus
-);
-
-// 🔹 Delete payroll (admin)
-router.delete(
-  '/:id',
-  protect,
-  adminOnly,
-  payrollController.deletePayroll
-);
-
-// 🔹 Generate payroll for all employees (monthly – admin)
-router.post(
-  '/generate/monthly',
-  protect,
-  adminOnly,
-  payrollController.generateMonthlyPayroll
-);
-
-// 🔹 Get payrolls of a specific employee
-router.get(
-  '/employee/:employeeId',
-  protect,
-  payrollController.getEmployeePayrolls
-);
-
-// 🔹 Employee accept / reject payroll
-router.put(
-  '/employee/action/:id',
-  protect,
-  payrollController.employeeActionOnPayroll
-);
 
 // ====================AuditLog Admin Routes ==================== 
 router.get('/admin/getAllAudits', protect, adminOnly, auditController.getAllAuditLogs); 
@@ -197,6 +136,68 @@ router.route('/')
 router.route('/:id')
   .put(protect, adminOnly, salaryRuleController.updateSalaryRule)
   .delete(protect, adminOnly, salaryRuleController.deleteSalaryRule);
+
+  // ====================Payroll Routes(Admin Only) ==================== 
+// 🔹 Create payroll (auto calculation for one employee)
+router.post(
+  '/',
+  protect,
+  adminOnly,
+  payrollController.createPayroll
+);
+
+// 🔹 Get all payrolls (admin)
+router.get(
+  '/',
+  protect,
+  adminOnly,
+  payrollController.getAllPayrolls
+);
+
+// 🔹 Get payroll by ID
+router.get(
+  '/:id',
+  protect,
+  payrollController.getPayrollById
+);
+
+// 🔹 Update payroll status (admin)
+router.put(
+  '/:id/status',
+  protect,
+  adminOnly,
+  payrollController.updatePayrollStatus
+);
+
+// 🔹 Delete payroll (admin)
+router.delete(
+  '/:id',
+  protect,
+  adminOnly,
+  payrollController.deletePayroll
+);
+
+// 🔹 Generate payroll for all employees (monthly – admin)
+router.post(
+  '/generate/monthly',
+  protect,
+  adminOnly,
+  payrollController.generateMonthlyPayroll
+);
+
+// 🔹 Get payrolls of a specific employee
+router.get(
+  '/employee/:employeeId',
+  protect,
+  payrollController.getEmployeePayrolls
+);
+
+// 🔹 Employee accept / reject payroll
+router.put(
+  '/employee/action/:id',
+  protect,
+  payrollController.employeeActionOnPayroll
+);
 
 // =================== WeaklyOff Routes ====================
 router.get("/getWeekly-off", protect, OfficeSchedule.getWeeklyOff);
