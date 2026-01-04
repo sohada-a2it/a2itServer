@@ -70,7 +70,7 @@ router.get('/admin/records/:userId', protect, adminOnly, attendanceController.ge
 router.post('/admin/payroll', protect,adminOnly,payrollController.createPayroll); 
 router.get('/admin/getAllpayroll',protect,adminOnly,payrollController.getAllPayrolls); 
 router.get('/admin/payroll/:id',protect,adminOnly,payrollController.getPayrollById); 
-router.put('/admin/updatePayroll/:id',protect,adminOnly,payrollController.updatePayroll); 
+router.put('/admin/updatePayroll/:id',protect,adminOnly,payrollController.updatePayrollStatus); 
 router.delete('/admin/deletepayroll/:id',protect,adminOnly,payrollController.deletePayroll);  
 
 // ====================AuditLog Admin Routes ==================== 
