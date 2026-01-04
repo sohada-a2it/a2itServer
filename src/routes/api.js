@@ -93,29 +93,25 @@ router.get('/admin/statistics', protect, adminOnly, sessionController.getSession
 router.delete('/admin/session/:id', protect, adminOnly, sessionController.deleteSessionById); 
 
 // =====================Holiday Routes===================== 
-// Public endpoints (no auth required)
-router.get('/', protect,holidayController.getHolidays);
-router.get('/stats', protect,holidayController.getHolidayStats);
-router.get('/export', protect,holidayController.exportHolidays);
+router.get('/', holidayController.getHolidays); // No protect middleware
+router.get('/stats', holidayController.getHolidayStats);
+router.get('/export', holidayController.exportHolidays);
 
-// Protected endpoints (require auth)
-router.get('/:id',protect, adminOnly, holidayController.getHolidayById);
+// Protected endpoints (require authentication)
+router.get('/:id', protect, holidayController.getHolidayById);
 
-// Admin only endpoints (require auth + admin role)
-router.post('/',protect, adminOnly, holidayController.addHoliday); // POST /holidays
-router.put('/:id',protect, adminOnly, holidayController.updateHoliday); // PUT /holidays/:id
-router.delete('/:id',protect, adminOnly, holidayController.deleteHoliday); // DELETE /holidays/:id
-router.post('/import',protect, adminOnly, holidayController.importHolidays); // POST /holidays/import
+// Admin only endpoints
+router.post('/', protect, adminOnly, holidayController.addHoliday);
+router.put('/:id', protect, adminOnly, holidayController.updateHoliday);
+router.delete('/:id', protect, adminOnly, holidayController.deleteHoliday);
+router.post('/import', protect, adminOnly, holidayController.importHolidays);
 
 
 // =================== Leave Routes ==================== 
 router.get('/my',protect, leaveController.getMyLeaves);
 router.post('/request',protect, leaveController.requestLeave);
 router.get('/balance/summary',protect, leaveController.getLeaveBalance);
-router.get('/stats/summary',protect, leaveController.getLeaveStats);
-router.get('/balance/summary', leaveController.getLeaveBalance); // ✅ ADDED
-router.get('/stats/summary', leaveController.getLeaveStats); // ✅ ADDED
-router.get('/departments', leaveController.getDepartments); // ✅ ADDED
+router.get('/stats/summary',protect, leaveController.getLeaveStats); 
 // ===================== Admin Routes ===================== 
 
 router.get('/all',protect,adminOnly, leaveController.getAllLeaves);
