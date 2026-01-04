@@ -67,11 +67,66 @@ router.get('/admin/summary/:userId', protect, adminOnly, attendanceController.ge
 router.get('/admin/records/:userId', protect, adminOnly, attendanceController.getAllAttendanceRecords);
  
 // ====================Payroll Routes(Admin Only) ==================== 
-router.post('/admin/payroll', protect,adminOnly,payrollController.createPayroll); 
-router.get('/admin/getAllpayroll',protect,adminOnly,payrollController.getAllPayrolls); 
-router.get('/admin/payroll/:id',protect,adminOnly,payrollController.getPayrollById); 
-router.put('/admin/updatePayroll/:id',protect,adminOnly,payrollController.updatePayrollStatus); 
-router.delete('/admin/deletepayroll/:id',protect,adminOnly,payrollController.deletePayroll);  
+// 🔹 Create payroll (auto calculation for one employee)
+router.post(
+  '/',
+  protect,
+  adminOnly,
+  payrollController.createPayroll
+);
+
+// 🔹 Get all payrolls (admin)
+router.get(
+  '/',
+  protect,
+  adminOnly,
+  payrollController.getAllPayrolls
+);
+
+// 🔹 Get payroll by ID
+router.get(
+  '/:id',
+  protect,
+  payrollController.getPayrollById
+);
+
+// 🔹 Update payroll status (admin)
+router.put(
+  '/:id/status',
+  protect,
+  adminOnly,
+  payrollController.updatePayrollStatus
+);
+
+// 🔹 Delete payroll (admin)
+router.delete(
+  '/:id',
+  protect,
+  adminOnly,
+  payrollController.deletePayroll
+);
+
+// 🔹 Generate payroll for all employees (monthly – admin)
+router.post(
+  '/generate/monthly',
+  protect,
+  adminOnly,
+  payrollController.generateMonthlyPayroll
+);
+
+// 🔹 Get payrolls of a specific employee
+router.get(
+  '/employee/:employeeId',
+  protect,
+  payrollController.getEmployeePayrolls
+);
+
+// 🔹 Employee accept / reject payroll
+router.put(
+  '/employee/action/:id',
+  protect,
+  payrollController.employeeActionOnPayroll
+);
 
 // ====================AuditLog Admin Routes ==================== 
 router.get('/admin/getAllAudits', protect, adminOnly, auditController.getAllAuditLogs); 

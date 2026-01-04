@@ -1,34 +1,81 @@
+// models/SalaryRuleModel.js
 const mongoose = require('mongoose');
 
 const salaryRuleSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-
-  salaryType: {
+  title: {
     type: String,
-    enum: ['Hourly', 'Monthly', 'Project'],
-    required: true
+    required: [true, 'Title is required'],
+    trim: true
   },
-
-  rate: { type: Number, required: true }, // base salary / hour / project
-  overtimeRate: { type: Number, default: 0 },
-  bonus: { type: Number, default: 0 },
-
-  // 🔽 Leave deduction rule
-  leaveRule: {
-    enabled: { type: Boolean, default: false },
-    perDayDeduction: { type: Number, default: 0 } // 1 day leave = x taka
+  description: {
+    type: String, 
+    trim: true
   },
-
-  // 🔽 Late deduction rule
-  lateRule: {
-    enabled: { type: Boolean, default: false },
-    lateDaysThreshold: { type: Number, default: 0 }, // e.g. 3 days
-    equivalentLeaveDays: { type: Number, default: 0 } // e.g. 1 day salary cut
+  ruleType: {
+    type: String,
+    enum: ['late_deduction', 'adjustment_deduction', 'bonus', 'allowance'],
+    default: 'late_deduction'
   },
+  calculation: {
+    type: String,
+    default: ''
+  },
+  deductionAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  conditions: {
+    threshold: {
+      type: Number,
+      default: 1,
+      min: 0
+    },
+    deductionType: {
+      type: String,
+      enum: ['daily_salary', 'percentage', 'fixed_amount'],
+      default: 'daily_salary'
+    },
+    applicableTo: [{
+      type: String,
+      default: ['all_employees']
+    }],
+    effectiveFrom: {
+      type: Date,
+      default: Date.now
+    }
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  },
+  isSystemDefault: {
+    type: Boolean,
+    default: false
+  },
+  ruleCode: {
+    type: String,
+    unique: true
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
+  }
+});
 
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  isActive: { type: Boolean, default: true }
+// Update timestamp on save
+salaryRuleSchema.pre('save', function(next) {
+  this.updatedAt = Date.now();
+  next();
+});
 
-}, { timestamps: true });
-
-module.exports = mongoose.model('SalaryRule', salaryRuleSchema);
+const SalaryRule = mongoose.model('SalaryRule', salaryRuleSchema);
+module.exports = SalaryRule;
