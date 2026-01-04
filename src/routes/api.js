@@ -112,6 +112,7 @@ router.get('/my',protect, leaveController.getMyLeaves);
 router.post('/request',protect, leaveController.requestLeave);
 router.get('/balance/summary',protect, leaveController.getLeaveBalance);
 router.get('/stats/summary',protect, leaveController.getLeaveStats); 
+router.get('/departments', protect, leaveController.getDepartments);  
 // ===================== Admin Routes ===================== 
 
 router.get('/all',protect,adminOnly, leaveController.getAllLeaves);
