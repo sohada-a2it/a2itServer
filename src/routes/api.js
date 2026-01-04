@@ -189,12 +189,12 @@ router.get('/', protect, salaryRuleController.getActiveSalaryRules);
 router.get('/:id', protect, salaryRuleController.getSalaryRuleById);
 
 // Admin routes (full CRUD)
-router.route('/salary-rules1')
+router.route('/')
   .get(protect, adminOnly, salaryRuleController.getAllSalaryRules)
   .post(protect, adminOnly, salaryRuleController.createSalaryRule);
 
 
-router.route('/salary-rules2/:id')
+router.route('/:id')
   .put(protect, adminOnly, salaryRuleController.updateSalaryRule)
   .delete(protect, adminOnly, salaryRuleController.deleteSalaryRule);
 
