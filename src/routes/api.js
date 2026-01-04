@@ -125,7 +125,7 @@ router.delete('/:id',protect, leaveController.deleteLeave);
 
 // =================== SalaryRule Routes ====================
 router.get('/active', protect, salaryRuleController.getActiveSalaryRules);
-router.get('/type/:type', protect, salaryRuleController.getSalaryRulesByType);
+router.get('/type/:type', protect, salaryRuleController.getSalaryRuleById);
 
 // Admin only routes
 router.get('/', protect, adminOnly, salaryRuleController.getAllSalaryRules);
@@ -133,7 +133,7 @@ router.post('/', protect, adminOnly, salaryRuleController.createSalaryRule);
 router.get('/:id', protect, salaryRuleController.getSalaryRuleById);
 router.put('/:id', protect, adminOnly, salaryRuleController.updateSalaryRule);
 router.delete('/:id', protect, adminOnly, salaryRuleController.deleteSalaryRule);
-router.patch('/:id/toggle-status', protect, adminOnly, salaryRuleController.toggleRuleStatus);
+router.patch('/:id/toggle-status', protect, adminOnly, salaryRuleController.toggleActiveStatus);
   // ====================Payroll Routes(Admin Only) ==================== 
 // 🔹 Create payroll (auto calculation for one employee)
 // router.post(
