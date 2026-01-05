@@ -76,9 +76,9 @@ router.get('/my-leaves', protect, leaveController.getMyLeaves);
 router.get('/balance', protect, leaveController.getLeaveBalance);
 router.get('/stats', protect, leaveController.getLeaveStats);
 router.post('/request', protect, leaveController.requestLeave);
-router.get('/:id', protect, leaveController.getLeaveById);
-router.put('/:id', protect, leaveController.updateLeave);
-router.delete('/:id', protect, leaveController.deleteLeave);
+router.get('/getLeave/:id', protect, leaveController.getLeaveById);
+router.put('/updateLeave/:id', protect, leaveController.updateLeave);
+router.delete('/deleteLeave/:id', protect, leaveController.deleteLeave);
 
 // Admin routes
 router.get('/admin/all', protect, adminOnly, leaveController.getAllLeaves);
