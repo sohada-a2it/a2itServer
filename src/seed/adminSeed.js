@@ -4,57 +4,55 @@ const dotenv = require("dotenv");
 
 dotenv.config();
 
-// Import User model
 const User = require("../models/UsersModel");
-
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log("MongoDB connected ✅");
-    console.log("Database:", mongoose.connection.name);
-  })
-  .catch((err) => {
-    console.error("MongoDB connection error:", err.message);
-    process.exit(1);
-  });
 
 const seedAdmin = async () => {
   try {
-    console.log("\n=== Seeding Admin User ===");
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log("MongoDB connected ✅");
 
-    // Admin data
-const adminData = {
-  firstName: "Super",
-  lastName: "Admin",
-  email: "a2itsohada@gmail.com",
-  password: "Admin123",
-  role: "admin",
+    const adminData = {
+      firstName: "Super",
+      lastName: "Admin",
+      email: "a2itsohada@gmail.com",
+      password: "Admin123",
+      role: "admin",
+      
+      isActive: true,
+      status: "active",
+      
+      department: "Administration",
+      designation: "System Administrator",
+      phone: "01700000000",
+      employeeId: "", // Admin এর জন্য empty
+      
+      salaryType: "monthly",
+      rate: 0,
+      salary: 0,
+      basicSalary: 0,
+      joiningDate: new Date(),
+      
+      picture: "https://example.com/default-avatar.png",
+      address: "Dhaka, Bangladesh",
+      
+      // Admin-specific fields
+      adminLevel: "super",
+      companyName: "Your Company Ltd.",
+      adminPosition: "Chief Administrator",
+      permissions: [
+        "user:read", 
+        "user:create", 
+        "user:update", 
+        "user:delete",
+        "payroll:manage",
+        "settings:manage",
+        "reports:view"
+      ],
+      isSuperAdmin: true,
+      canManageUsers: true,
+      canManagePayroll: true
+    };
 
-  // Status
-  isActive: true,
-  status: "active",
-
-  // Organization
-  department: "Administration",
-  designation: "System Admin",
-  joiningDate: new Date(), // today
-
-  // Contact
-  phone: "01700000000",
-  AdminId: "ADMIN-" + Date.now(),
-
-  // Profile
-  picture: "https://example.com/default-avatar.png",
-  address: "Dhaka, Bangladesh",
-
-  // Permissions
-  isSuperAdmin: true,
-  permissions: ["manage_users", "view_reports"],
-};
-
-
-
-    // Check if admin already exists
     let admin = await User.findOne({ email: adminData.email });
 
     if (admin) {
@@ -68,22 +66,18 @@ const adminData = {
       console.log("✅ Admin created successfully!");
     }
 
-    // Verification
     console.log("\n=== Verification ===");
     console.log("Name:", admin.firstName + " " + admin.lastName);
     console.log("Email:", admin.email);
     console.log("Role:", admin.role);
-    console.log("ID:", admin.AdminId);
-
+    console.log("Admin Level:", admin.adminLevel);
+    console.log("Company:", admin.companyName);
+    
     process.exit(0);
   } catch (err) {
     console.error("\n❌ Error seeding admin:", err.message);
-    console.error(err.stack);
     process.exit(1);
   }
 };
 
-// Run seeding after connection is ready
-mongoose.connection.once("open", () => {
-  seedAdmin();
-});
+seedAdmin();
