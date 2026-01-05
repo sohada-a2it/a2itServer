@@ -154,7 +154,7 @@ const userSchema = new mongoose.Schema(
     },
     loginCount: { 
       type: Number, 
-      default: 0  // 🔹 FIX: default value যোগ করুন
+      default: 0
     },
 
     // Soft delete
@@ -175,13 +175,14 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// ✅ Password Hashing Middleware (Fixed)
+// 🔹 **CRITICAL FIX: Password Hashing Middleware (First model থেকে নেওয়া)**
 userSchema.pre("save", async function (next) {
-  // শুধুমাত্র password modify হলে hash করবে
+  // Only hash the password if it has been modified (or is new)
   if (!this.isModified("password")) return next();
   
   try {
-    const salt = await bcrypt.genSalt(10);
+    // ✅ প্রথম model থেকে সঠিক implementation
+    const salt = await bcrypt.genSalt(10);  // 10 rounds of salt
     this.password = await bcrypt.hash(this.password, salt);
     next();
   } catch (error) {
@@ -189,22 +190,47 @@ userSchema.pre("save", async function (next) {
   }
 });
 
-// ✅ Password Comparison Method
-userSchema.methods.matchPassword = async function (password) {
+// 🔹 **Password Comparison Method (First model থেকে নেওয়া)**
+userSchema.methods.matchPassword = async function (enteredPassword) {
   try {
-    return await bcrypt.compare(password, this.password);
+    // ✅ bcrypt.compare ব্যবহার করুন
+    return await bcrypt.compare(enteredPassword, this.password);
   } catch (error) {
     console.error('Password comparison error:', error);
     return false;
   }
 };
 
-// ✅ Virtual for full name
+// 🔹 **Alternative: Direct password check method (if matchPassword doesn't work)**
+userSchema.methods.checkPassword = async function (password) {
+  try {
+    console.log('🔐 Checking password:');
+    console.log('- Input password:', password);
+    console.log('- Stored password hash:', this.password?.substring(0, 30) + '...');
+    
+    const result = await bcrypt.compare(password, this.password);
+    console.log('- Bcrypt compare result:', result);
+    
+    return result;
+  } catch (error) {
+    console.error('❌ Password check error:', error);
+    
+    // Fallback: If bcrypt fails, try direct comparison for plain text passwords
+    if (this.password && !this.password.startsWith('$2')) {
+      console.log('⚠️ Falling back to direct comparison');
+      return password === this.password;
+    }
+    
+    return false;
+  }
+};
+
+// Virtual for full name
 userSchema.virtual('fullName').get(function() {
   return `${this.firstName} ${this.lastName}`.trim();
 });
 
-// ✅ Pre-save middleware to handle role-based logic
+// Pre-save middleware to handle role-based logic
 userSchema.pre('save', function(next) {
   // Generate employeeId for employees if not provided
   if (this.role === 'employee' && (!this.employeeId || this.employeeId === '')) {
@@ -259,7 +285,7 @@ userSchema.pre('save', function(next) {
   next();
 });
 
-// ✅ Method to check role
+// Method to check role
 userSchema.methods.isAdmin = function() {
   return this.role === 'admin';
 };
@@ -268,22 +294,35 @@ userSchema.methods.isEmployee = function() {
   return this.role === 'employee';
 };
 
-// ✅ Method to check permissions
+// Method to check permissions
 userSchema.methods.hasPermission = function(permission) {
   if (this.role !== 'admin') return false;
   if (this.isSuperAdmin || this.adminLevel === 'super') return true;
   return this.permissions && this.permissions.includes(permission);
 };
 
-// ✅ Static method to get user by email
+// Static method to get user by email
 userSchema.statics.findByEmail = function(email) {
   return this.findOne({ email: email.toLowerCase().trim() });
 };
 
-// ✅ Static method to check if email exists
+// Static method to check if email exists
 userSchema.statics.emailExists = async function(email) {
   const user = await this.findOne({ email: email.toLowerCase().trim() });
   return !!user;
+};
+
+// ✅ Method to fix password if it's plain text
+userSchema.methods.migratePassword = async function(plainPassword) {
+  if (!this.password.startsWith('$2')) {
+    console.log('🔄 Migrating plain password to bcrypt hash');
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(plainPassword, salt);
+    await this.save();
+    console.log('✅ Password migrated successfully');
+    return true;
+  }
+  return false;
 };
 
 module.exports = mongoose.model("User", userSchema);
