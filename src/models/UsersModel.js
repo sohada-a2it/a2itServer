@@ -50,9 +50,16 @@ const userSchema = new mongoose.Schema(
     department: { type: String, default: '' },
     designation: { type: String, default: '' },
     phone: { type: String, default: '' },
-    employeeId: { type: String, default: '' },
 
-    // Salary Info (Employee-specific, কিন্তু Admin-ও হতে পারে)
+    // Employee ID - শুধুমাত্র String (ObjectId নয়)
+    employeeId: { 
+      type: String, 
+      default: '',
+      unique: true,
+      sparse: true
+    },
+
+    // Salary Info
     salaryType: { 
       type: String, 
       enum: ['hourly', 'monthly', 'project', 'yearly', 'commission', 'fixed'],
@@ -63,11 +70,11 @@ const userSchema = new mongoose.Schema(
       min: 0,
       default: 0
     },
-    salary: {  // ✅ salary ফিল্ড যোগ করুন (আপনার original থেকে)
+    salary: {
       type: Number,
       default: 0
     },
-    basicSalary: { // নতুন field
+    basicSalary: {
       type: Number,
       min: 0,
       default: 0
@@ -77,7 +84,7 @@ const userSchema = new mongoose.Schema(
       default: Date.now
     },
 
-    // Profile Picture
+    // Profile
     picture: { 
       type: String,
       default: '' 
@@ -87,7 +94,7 @@ const userSchema = new mongoose.Schema(
       default: ''
     },
 
-    // Salary Rule (আপনার original থেকে রাখা)
+    // Salary Rule
     salaryRule: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'SalaryRule',
@@ -95,38 +102,22 @@ const userSchema = new mongoose.Schema(
     },
 
     // ============ ADMIN-SPECIFIC FIELDS ============
-    // এগুলো শুধু Admin এর জন্য populate হবে
+    companyName: {
+      type: String,
+      default: ''
+    },
     adminLevel: {
       type: String,
       enum: ['super', 'admin', 'manager', 'moderator'],
-      default: 'admin',
-      required: function() {
-        return this.role === 'admin'; // শুধু admin হলে required
-      }
-    },
-    companyName: {
-      type: String,
-      default: '',
-      required: function() {
-        return this.role === 'admin';
-      }
+      default: 'admin'
     },
     adminPosition: {
       type: String,
-      default: 'Administrator',
-      required: function() {
-        return this.role === 'admin';
-      }
+      default: 'Administrator'
     },
     permissions: {
-      type: [String], // Array of permissions
-      default: function() {
-        // Role-based default permissions
-        if (this.role === 'admin') {
-          return ['user:read', 'user:create', 'user:update'];
-        }
-        return [];
-      }
+      type: [String],
+      default: []
     },
     isSuperAdmin: {
       type: Boolean,
@@ -134,26 +125,18 @@ const userSchema = new mongoose.Schema(
     },
     canManageUsers: {
       type: Boolean,
-      default: function() {
-        return this.role === 'admin';
-      }
+      default: false
     },
     canManagePayroll: {
       type: Boolean,
-      default: function() {
-        return this.role === 'admin';
-      }
+      default: false
     },
 
     // ============ EMPLOYEE-SPECIFIC FIELDS ============
-    // এগুলো শুধু Employee এর জন্য
-    employeeId: {
+    managerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      default: null,
-      required: function() {
-        return this.role === 'employee';
-      }
+      default: null
     },
     attendanceId: {
       type: String,
@@ -162,11 +145,26 @@ const userSchema = new mongoose.Schema(
     shiftTiming: {
       start: { type: String, default: '09:00' },
       end: { type: String, default: '18:00' }
+    },
+
+    // Login Stats
+    lastLogin: { 
+      type: Date,
+      default: null 
+    },
+    loginCount: { 
+      type: Number, 
+      default: 0  // 🔹 FIX: default value যোগ করুন
+    },
+
+    // Soft delete
+    isDeleted: {
+      type: Boolean,
+      default: false
     }
   },
   { 
     timestamps: true,
-    // Optional: আপনি চাইলে toJSON transform add করতে পারেন
     toJSON: { 
       transform: function(doc, ret) {
         delete ret.password;
@@ -177,12 +175,13 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// ✅ **সঠিক Password Hashing (আগের model থেকে)**
+// ✅ Password Hashing Middleware (Fixed)
 userSchema.pre("save", async function (next) {
+  // শুধুমাত্র password modify হলে hash করবে
   if (!this.isModified("password")) return next();
   
   try {
-    const salt = await bcrypt.genSalt(10);  // এই line টি crucial
+    const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
     next();
   } catch (error) {
@@ -190,99 +189,101 @@ userSchema.pre("save", async function (next) {
   }
 });
 
-// ✅ **সঠিক Password Comparison (আগের model থেকে)**
+// ✅ Password Comparison Method
 userSchema.methods.matchPassword = async function (password) {
-  return await bcrypt.compare(password, this.password);  // await টি important
+  try {
+    return await bcrypt.compare(password, this.password);
+  } catch (error) {
+    console.error('Password comparison error:', error);
+    return false;
+  }
 };
 
-// Optional: Basic virtuals (নতুন model থেকে)
+// ✅ Virtual for full name
 userSchema.virtual('fullName').get(function() {
-  return `${this.firstName} ${this.lastName}`;
+  return `${this.firstName} ${this.lastName}`.trim();
 });
 
-// ✅ Role-based validation
+// ✅ Pre-save middleware to handle role-based logic
 userSchema.pre('save', function(next) {
-  // Admin validation
+  // Generate employeeId for employees if not provided
+  if (this.role === 'employee' && (!this.employeeId || this.employeeId === '')) {
+    const timestamp = Date.now().toString().slice(-6);
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    this.employeeId = `EMP-${timestamp}${random}`;
+  }
+
+  // Admin users - set empty employeeId
+  if (this.role === 'admin' && (!this.employeeId || this.employeeId === '')) {
+    this.employeeId = '';
+  }
+
+  // Set default permissions for admin
   if (this.role === 'admin') {
-    if (!this.adminLevel) {
-      this.adminLevel = 'admin';
-    }
     if (!this.permissions || this.permissions.length === 0) {
       this.permissions = ['user:read', 'user:create', 'user:update'];
     }
-    // Admin এর জন্য employeeId থাকবে না বা empty রাখুন
-    if (!this.employeeId) {
-      this.employeeId = '';
+    
+    // Set default admin values if not provided
+    if (!this.adminLevel) this.adminLevel = 'admin';
+    if (!this.adminPosition) this.adminPosition = 'Administrator';
+    if (!this.companyName) this.companyName = 'Default Company';
+    
+    // Ensure admin has proper access rights
+    if (this.adminLevel === 'super' || this.isSuperAdmin) {
+      this.canManageUsers = true;
+      this.canManagePayroll = true;
+      this.permissions = [...this.permissions, 'user:delete', 'admin:all'];
     }
   }
-  
-  // Employee validation
+
+  // Clear admin-specific fields for employees
   if (this.role === 'employee') {
-    if (!this.employeeId) {
-      // Generate employee ID
-      const timestamp = Date.now().toString().slice(-6);
-      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-      this.employeeId = `EMP-${timestamp}${random}`;
-    }
-    
-    // Employee এর জন্য admin specific fields clear করুন
     this.adminLevel = undefined;
-    this.companyName = undefined;
     this.adminPosition = undefined;
+    this.companyName = undefined;
     this.isSuperAdmin = undefined;
     this.canManageUsers = undefined;
     this.canManagePayroll = undefined;
+    this.permissions = [];
   }
-  
-  // Salary calculation যদি rate দেয়া থাকে
+
+  // Calculate salary if rate is provided
   if (this.salaryType === 'monthly' && this.rate > 0 && this.salary === 0) {
     this.salary = this.rate;
-    this.basicSalary = this.rate;
+    if (this.basicSalary === 0) {
+      this.basicSalary = this.rate;
+    }
   }
-  
+
   next();
 });
 
-// ✅ Static method to get role-based fields
-userSchema.statics.getRoleFields = function(role) {
-  const commonFields = [
-    'firstName', 'lastName', 'email', 'password',
-    'role', 'isActive', 'status', 'department',
-    'designation', 'phone', 'picture', 'address',
-    'salaryType', 'rate', 'salary', 'basicSalary',
-    'joiningDate', 'salaryRule'
-  ];
-  
-  if (role === 'admin') {
-    return [
-      ...commonFields,
-      'adminLevel', 'companyName', 'adminPosition',
-      'permissions', 'isSuperAdmin', 'canManageUsers',
-      'canManagePayroll'
-    ];
-  } else {
-    return [
-      ...commonFields,
-      'employeeId', 'managerId', 'attendanceId', 'shiftTiming'
-    ];
-  }
-};
-
-// ✅ Method to check if user is admin
+// ✅ Method to check role
 userSchema.methods.isAdmin = function() {
   return this.role === 'admin';
 };
 
-// ✅ Method to check if user is employee
 userSchema.methods.isEmployee = function() {
   return this.role === 'employee';
 };
 
-// ✅ Method to check if user has permission
+// ✅ Method to check permissions
 userSchema.methods.hasPermission = function(permission) {
   if (this.role !== 'admin') return false;
-  if (this.isSuperAdmin) return true;
+  if (this.isSuperAdmin || this.adminLevel === 'super') return true;
   return this.permissions && this.permissions.includes(permission);
+};
+
+// ✅ Static method to get user by email
+userSchema.statics.findByEmail = function(email) {
+  return this.findOne({ email: email.toLowerCase().trim() });
+};
+
+// ✅ Static method to check if email exists
+userSchema.statics.emailExists = async function(email) {
+  const user = await this.findOne({ email: email.toLowerCase().trim() });
+  return !!user;
 };
 
 module.exports = mongoose.model("User", userSchema);

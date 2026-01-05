@@ -415,6 +415,8 @@ exports.updateAdminProfile = async (req, res) => {
 // ================= USER MANAGEMENT (ADMIN ONLY) =================
 
 // CREATE USER (ADMIN ONLY)
+// createUser function-এ এই changes করুন:
+
 exports.createUser = async (req, res) => {
   try {
     const {
@@ -422,21 +424,18 @@ exports.createUser = async (req, res) => {
       password,
       firstName,
       lastName,
-      role,
-      // Common fields
+      role = 'employee',
       phone,
       address,
       department,
       designation,
       employeeId,
       picture,
-      // Salary fields
       salaryType,
       rate,
       basicSalary,
       salary,
       joiningDate,
-      // Role-specific fields
       companyName,
       adminPosition,
       adminLevel,
@@ -449,10 +448,19 @@ exports.createUser = async (req, res) => {
       shiftTiming
     } = req.body;
 
-    console.log('📝 Creating user:', { email, role, firstName, lastName });
+    console.log('📝 Creating user with data:', {
+      email,
+      role,
+      firstName,
+      lastName,
+      employeeId
+    });
 
     // Check if user already exists
-    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
+    const existingUser = await User.findOne({ 
+      email: email.toLowerCase().trim() 
+    });
+    
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -469,79 +477,75 @@ exports.createUser = async (req, res) => {
       });
     }
 
-    // Prepare user data based on role
+    // Prepare base user data
     const userData = {
       firstName: firstName || '',
       lastName: lastName || '',
       email: email.toLowerCase().trim(),
-      password: password, // pre-save hook will hash it
+      password: password || 'defaultPassword123', // Temporary if not provided
       role: role,
       isActive: true,
-      status: "active",
+      status: 'active',
       phone: phone || '',
       address: address || '',
       department: department || '',
       designation: designation || '',
       picture: picture || '',
-      // Salary fields
       salaryType: salaryType || 'monthly',
       rate: rate || 0,
       basicSalary: basicSalary || 0,
       salary: salary || 0,
-      joiningDate: joiningDate || new Date(),
+      joiningDate: joiningDate ? new Date(joiningDate) : new Date()
     };
 
-    // Add employeeId for employees
+    // 🔹 CRITICAL FIX: employeeId handle
     if (role === 'employee') {
-      userData.employeeId = employeeId || `EMP-${Date.now().toString().slice(-6)}`;
+      // যদি employeeId provide করা থাকে
+      if (employeeId && employeeId.trim() !== '') {
+        // Check if employeeId already exists
+        const existingEmpId = await User.findOne({ employeeId: employeeId.trim() });
+        if (existingEmpId) {
+          return res.status(400).json({
+            success: false,
+            message: "Employee ID already exists"
+          });
+        }
+        userData.employeeId = employeeId.trim();
+      }
+      // else: model-এর pre-save hook auto-generate করবে
+    } else {
+      // Admin-দের জন্য employeeId empty string
+      userData.employeeId = '';
     }
 
     // Role-specific fields
     if (role === 'admin') {
-      userData.companyName = companyName || '';
+      userData.companyName = companyName || 'Default Company';
       userData.adminPosition = adminPosition || 'Administrator';
       userData.adminLevel = adminLevel || 'admin';
       userData.permissions = permissions || ['user:read', 'user:create', 'user:update'];
       userData.isSuperAdmin = isSuperAdmin || false;
-      userData.canManageUsers = canManageUsers || true;
-      userData.canManagePayroll = canManagePayroll || true;
+      userData.canManageUsers = canManageUsers !== undefined ? canManageUsers : true;
+      userData.canManagePayroll = canManagePayroll !== undefined ? canManagePayroll : true;
     }
 
     if (role === 'employee') {
       userData.managerId = managerId || null;
       userData.attendanceId = attendanceId || '';
-      userData.shiftTiming = shiftTiming || { start: '09:00', end: '17:00' };
+      userData.shiftTiming = shiftTiming || { start: '09:00', end: '18:00' };
     }
+
+    console.log('Final user data before save:', JSON.stringify(userData, null, 2));
 
     // Create new user
     const newUser = new User(userData);
     await newUser.save();
 
-    console.log('✅ User created successfully:', newUser.email);
-
-    // ✅ AuditLog
-    await AuditLog.create({
-      userId: req.user._id,
-      action: "Created User",
-      target: newUser._id,
-      details: {
-        email: newUser.email,
-        role: newUser.role,
-        createdBy: req.user.email
-      },
-      ip: req.ip,
-      device: req.headers['user-agent']
-    });
-
-    // ✅ Session activity
-    await addSessionActivity({
-      userId: req.user._id,
-      action: "Created User",
-      target: newUser._id,
-      details: {
-        email: newUser.email,
-        role: newUser.role
-      }
+    console.log('✅ User created successfully:', {
+      id: newUser._id,
+      email: newUser.email,
+      role: newUser.role,
+      employeeId: newUser.employeeId
     });
 
     // Remove password from response
@@ -553,21 +557,34 @@ exports.createUser = async (req, res) => {
       message: "User created successfully",
       user: userResponse
     });
-  } catch (error) {
-    console.error('Create user error:', error);
 
+  } catch (error) {
+    console.error('❌ Create user error details:', error);
+    
     // Handle validation errors
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(val => val.message);
-      return res.status(400).json({
+      console.error('Validation errors:', messages);
+      return res.status(400).json({ 
         success: false,
-        message: messages.join(', ')
+        message: `Validation failed: ${messages.join(', ')}`
       });
     }
-
-    res.status(500).json({
+    
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      const value = error.keyValue[field];
+      console.error('Duplicate key error:', { field, value });
+      return res.status(400).json({
+        success: false,
+        message: `${field} '${value}' already exists`
+      });
+    }
+    
+    res.status(500).json({ 
       success: false,
-      message: error.message
+      message: error.message || 'Internal server error'
     });
   }
 };
