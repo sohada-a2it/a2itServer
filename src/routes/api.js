@@ -50,13 +50,19 @@ router.delete(
 
 // ====================Attendace Routes ====================  
 // Employee routes
-router.get('/attendance/today-status', protect, attendanceController.getTodayStatus);
-router.get('/attendance/my-records', protect, attendanceController.getAttendanceRecords);
-router.get('/attendance/summary', protect, attendanceController.getUserSummary);
-router.post('/attendance/clock-in', protect, attendanceController.clockIn);
-router.post('/attendance/clock-out', protect, attendanceController.clockOut);
-router.get('/attendance/:id', protect, attendanceController.getAttendanceById);
-router.get('/attendance/date-range/records', protect, attendanceController.getAttendanceByDateRange);
+router.get('/today',protect, attendanceController.getTodayStatus);
+router.get('/records',protect, attendanceController.getAttendanceRecords);
+router.get('/summary', attendanceController.getUserSummary);
+router.get('/attendance/:id',protect, attendanceController.getAttendanceById);
+router.post('/clock-in',protect, attendanceController.clockIn);
+router.post('/clock-out',protect, attendanceController.clockOut);
+router.get('/export',protect, attendanceController.exportAttendanceData);
+router.get('/range',protect, attendanceController.getAttendanceByDateRange);
+
+// Admin routes
+router.get('/admin/records', adminOnly, attendanceController.getAllAttendanceRecords);
+router.get('/admin/summary', adminOnly, attendanceController.getAllAttendanceSummary);
+router.put('/admin/correct', adminOnly, attendanceController.adminCorrectAttendance);
 
 // Admin routes
 router.get('/admin/attendance/all', protect, adminOnly, attendanceController.getAllAttendanceRecords);

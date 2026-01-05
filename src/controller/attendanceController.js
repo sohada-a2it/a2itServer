@@ -366,10 +366,12 @@ exports.clockIn = async (req, res) => {
 };
 
 // ===================== Clock Out =====================
+// attendanceController.js এ clockOut ফাংশনে
+
 exports.clockOut = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { timestamp, location, device } = req.body;
+    const { timestamp, location, device, autoClockOut = false } = req.body;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -403,6 +405,7 @@ exports.clockOut = async (req, res) => {
     attendance.ipAddress = req.ip;
     attendance.device = deviceInfo;
     attendance.location = location || "Office";
+    attendance.autoClockOut = autoClockOut; // Add this field
 
     // Update status if it was "Clocked In" or "Late"
     if (attendance.status === "Clocked In" || attendance.status === "Late") {
@@ -413,23 +416,25 @@ exports.clockOut = async (req, res) => {
 
     await addSessionActivity({
       userId,
-      action: "Clocked Out",
+      action: autoClockOut ? "Auto Clocked Out" : "Clocked Out",
       target: attendance._id.toString(),
       details: {
         totalHours: attendance.totalHours,
         ip: req.ip,
         device: deviceInfo,
         location: location || "Office",
-        timestamp: clockOutTime
+        timestamp: clockOutTime,
+        autoClockOut
       }
     });
 
     res.status(200).json({
       status: "success",
-      message: "Clocked out successfully",
+      message: autoClockOut ? "Auto clocked out successfully" : "Clocked out successfully",
       attendance,
       clockedIn: true,
-      clockedOut: true
+      clockedOut: true,
+      autoClockOut
     });
 
   } catch (error) {
