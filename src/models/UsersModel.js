@@ -50,6 +50,17 @@ const userSchema = new mongoose.Schema(
     phone: { type: String, default: '' },
     employeeId: { type: String, default: '' },
 
+    salaryRule: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SalaryRule',
+      default: null
+    },
+
+    // Salary Info
+    salary: {  // ✅ salary ফিল্ড যোগ করুন
+      type: Number,
+      default: 0
+    },
     // Salary Info (সহজ version নিন আগেরটা থেকে)
     salaryType: { 
       type: String, 
