@@ -125,8 +125,7 @@ router.get('/getSalaryRule', protect, adminOnly, salaryRuleController.getAllSala
 router.get('/getSalaryRule/:id', protect, adminOnly, salaryRuleController.getSalaryRuleById);
 router.post('/createSalaryRule', protect, adminOnly, salaryRuleController.createSalaryRule);
 router.put('/updateSalaryRule/:id', protect, adminOnly, salaryRuleController.updateSalaryRule);
-router.delete('deleteSalaryRule/:id', protect, adminOnly, salaryRuleController.deleteSalaryRule);
-router.put('/:id/toggle-status', protect, adminOnly, salaryRuleController.toggleActiveStatus);
+router.delete('/deleteSalaryRule/:id', protect, adminOnly, salaryRuleController.deleteSalaryRule); 
 
 // ====================AuditLog Admin Routes ==================== 
 router.get('/admin/getAllAudits', protect, adminOnly, auditController.getAllAuditLogs); 
