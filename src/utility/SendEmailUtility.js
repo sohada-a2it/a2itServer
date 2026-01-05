@@ -1,83 +1,121 @@
-// utility/SendEmailUtility.js - এডিট করুন
+// utility/SendEmailUtility.js
 const nodemailer = require("nodemailer");
-require('dotenv').config(); // 👈 যোগ করুন
+require('dotenv').config();
 
 const SendEmailUtility = async (EmailTo, EmailSubject, EmailText) => {
   try {
-    console.log('📧 ======= EMAIL SENDING START =======');
+    console.log('📧 ===== EMAIL SENDING START =====');
     console.log('To:', EmailTo);
+    console.log('From:', process.env.EMAIL_USER);
     console.log('Subject:', EmailSubject);
-    console.log('Text length:', EmailText.length);
-    console.log('EMAIL_USER:', process.env.EMAIL_USER);
-    console.log('EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
-
-    // Configure transporter with proper settings
+    
+    // Gmail App Password configuration
     const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
+      service: 'gmail',
+      auth: {
+        type: 'OAuth2', // 👈 Important: Use OAuth2
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      }
+    });
+
+    // Or try this alternative configuration:
+    const transporter2 = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
       port: 587,
       secure: false, // true for 465, false for other ports
       auth: {
-        user: process.env.EMAIL_USER || "a2itsohada@gmail.com",
-        pass: process.env.EMAIL_PASS || "cfet pnud xynr yuwe",
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
       },
       tls: {
-        rejectUnauthorized: false // Allow self-signed certificates
+        rejectUnauthorized: false
       }
     });
 
     // Verify connection
-    await transporter.verify();
-    console.log('✅ SMTP Connection verified');
+    console.log('🔍 Verifying SMTP connection...');
+    await transporter2.verify();
+    console.log('✅ SMTP Connection verified!');
 
-    // Email options
-    let mailOption = {
-      from: `"A2IT HRM System" <${process.env.EMAIL_USER || "a2itsohada@gmail.com"}>`,
+    // Email content
+    const mailOptions = {
+      from: `"A2IT HRM System" <${process.env.EMAIL_USER}>`,
       to: EmailTo,
       subject: EmailSubject,
       text: EmailText,
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; color: white; text-align: center;">
-            <h1 style="margin: 0;">A2IT HRM System</h1>
-          </div>
-          <div style="padding: 30px; background: #f9fafb;">
-            <h2 style="color: #374151;">Password Reset OTP</h2>
-            <p style="color: #6b7280; line-height: 1.6;">
-              You have requested to reset password for user: <strong>${EmailText.split('for ')[1]?.split(' ')[0] || 'User'}</strong>
-            </p>
-            <div style="background: white; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0; border: 1px solid #e5e7eb;">
-              <div style="font-size: 32px; font-weight: bold; letter-spacing: 10px; color: #7c3aed;">
-                ${EmailText.match(/OTP Code: (\d{6})/)?.[1] || '123456'}
-              </div>
-              <div style="color: #9ca3af; margin-top: 10px; font-size: 14px;">
-                This OTP is valid for 10 minutes
-              </div>
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                     padding: 30px; color: white; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+            .otp-box { background: white; padding: 20px; text-align: center; margin: 20px 0; 
+                      border-radius: 8px; border: 2px dashed #667eea; }
+            .otp-code { font-size: 32px; font-weight: bold; letter-spacing: 10px; color: #7c3aed; }
+            .footer { text-align: center; margin-top: 20px; color: #6b7280; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🔐 A2IT HRM System</h1>
+              <p>Password Reset OTP Verification</p>
             </div>
-            <p style="color: #6b7280; font-size: 14px;">
-              If you didn't request this, please ignore this email.
-            </p>
+            <div class="content">
+              <h2>Hello Admin,</h2>
+              <p>You have requested to reset password for:</p>
+              <p><strong>User Email:</strong> ${EmailText.match(/for (.*?)\n/)?.[1] || 'N/A'}</p>
+              
+              <div class="otp-box">
+                <p style="margin-bottom: 10px; color: #6b7280;">Your OTP Code is:</p>
+                <div class="otp-code">${EmailText.match(/OTP Code: (\d{6})/)?.[1] || '000000'}</div>
+                <p style="margin-top: 10px; color: #9ca3af; font-size: 14px;">
+                  Valid for 10 minutes
+                </p>
+              </div>
+              
+              <p>If you didn't request this password reset, please ignore this email.</p>
+              <p>For security reasons, do not share this OTP with anyone.</p>
+            </div>
+            <div class="footer">
+              <p>© ${new Date().getFullYear()} A2IT HRM System. All rights reserved.</p>
+              <p>This is an automated message, please do not reply.</p>
+            </div>
           </div>
-          <div style="background: #f3f4f6; padding: 15px; text-align: center; color: #9ca3af; font-size: 12px;">
-            © ${new Date().getFullYear()} A2IT HRM System. All rights reserved.
-          </div>
-        </div>
+        </body>
+        </html>
       `
     };
 
-    console.log('📤 Sending email...');
-    const info = await transporter.sendMail(mailOption);
-    console.log('✅ Email sent successfully! Message ID:', info.messageId);
-    console.log('📧 ======= EMAIL SENDING END =======');
+    console.log('📤 Attempting to send email...');
+    const info = await transporter2.sendMail(mailOptions);
+    
+    console.log('✅ Email sent successfully!');
+    console.log('Message ID:', info.messageId);
+    console.log('Preview URL:', nodemailer.getTestMessageUrl(info));
+    console.log('📧 ===== EMAIL SENDING END =====');
     
     return info;
+    
   } catch (error) {
-    console.error('❌ EMAIL SENDING FAILED:', error);
-    console.error('Error details:', {
+    console.error('❌ EMAIL SENDING FAILED!');
+    console.error('Error Details:', {
       name: error.name,
       message: error.message,
       code: error.code,
-      command: error.command
+      command: error.command,
+      responseCode: error.responseCode,
+      response: error.response
     });
+    
+    // If email fails, log to database or file
+    console.log('💾 Logging email failure to console...');
+    
     throw error;
   }
 };
