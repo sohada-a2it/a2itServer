@@ -1,7 +1,6 @@
 
 const express = require('express')
-const router = express.Router()
-const adminController = require("../controller/adminController")  
+const router = express.Router() 
 const userController = require("../controller/userController")
 const authController = require("../controller/authController")
 const payrollController = require('../controller/payrollController'); 
@@ -17,19 +16,25 @@ const upload = require('../middleware/multer');
 const { protect, adminOnly } = require("../middleware/AuthVerifyMiddleWare"); 
 
 // =================== Login Routes ====================
-router.post("/admin/login", adminController.adminLogin);  
+router.post("/admin/login", userController.adminLogin);  
 router.post("/users/userLogin", userController.userLogin);  
 
 // =================== Admin Control Routes ====================
-router.post("/admin/create-user", protect, adminOnly, adminController.createUser); 
-router.get("/admin/getAdminProfile", protect, adminOnly, adminController.getAdminProfile); 
-router.post("/admin/updateAdminProfile", protect, adminOnly, adminController.updateAdminProfile); 
-router.get("/admin/getAll-user", protect, adminOnly, adminController.getAllUsers); 
-router.put("/admin/update-user/:id", protect, adminOnly, adminController.adminUpdateUser); 
-router.delete("/admin/user-delete/:id", protect, adminOnly, adminController.deleteUser); 
-router.post('/admin/request-otp', protect, adminOnly, authController.AdminRequestOtp);
-router.post('/admin/reset-password', protect, adminOnly, authController.AdminResetPassword );  
+router.post("/admin/create-user", protect, adminOnly, userController.createUser); 
+router.get("/admin/getAdminProfile", protect, adminOnly, userController.getAdminProfile); 
+router.post("/admin/updateAdminProfile", protect, adminOnly, userController.updateAdminProfile); 
+router.get("/admin/getAll-user", protect, adminOnly, userController.getAllUsers); 
+router.put("/admin/update-user/:id", protect, adminOnly, userController.adminUpdateUser); 
+router.delete("/admin/user-delete/:id", protect, adminOnly, userController.deleteUser); 
+// router.post('/admin/request-otp', protect, adminOnly, userController.AdminRequestOtp);
+// router.post('/admin/reset-password', protect, adminOnly, userController.AdminResetPassword );  
+router.get('/my-sessions', protect, userController.getAllSessions);
+router.delete('/terminate-session/:id', protect, userController.terminateSession);
+router.post('/logout-all', protect, userController.logoutAllSessions);
 
+// Admin only routes
+router.get('/all-sessions', protect, adminOnly, userController.getAllSessions);
+router.get('/session/:id', protect, adminOnly, userController.getSessionById);
 // =================== Employee Routes ====================  
 router.get("/users/getProfile", protect,userController.getProfile); 
 router.post("/users/updateProfile", protect,userController.updateProfile);     
