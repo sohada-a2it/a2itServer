@@ -7,36 +7,7 @@ const SessionLog = require('../models/SessionLogModel');
 const Holiday = require('../models/HolidayModel');
 const OfficeSchedule = require('../models/OfficeScheduleModel');
 const OfficeScheduleOverride = require('../models/TemporaryOfficeSchedule');
-
-// ===================== Helper: Add activity to active session =====================
-const addSessionActivity = async ({ userId, action, target = null, details = {} }) => {
-  try {
-    let session = await SessionLog.findOne({ userId, logoutAt: null }).sort({ loginAt: -1 });
-
-    if (!session) {
-      session = await SessionLog.create({
-        userId,
-        loginAt: new Date(),
-        ip: details.ip || 'N/A',
-        device: details.device || 'N/A',
-        activities: []
-      });
-    }
-
-    session.activities.push({
-      action,
-      target,
-      details,
-      timestamp: new Date()
-    });
-
-    await session.save();
-    return session;
-  } catch (error) {
-    console.error('Add session activity failed:', error);
-    return null;
-  }
-};
+const addSessionActivity = require('../utility/sessionLogModel'); 
 
 // ===================== Parse Device Info =====================
 const parseDeviceInfo = (userAgent) => {

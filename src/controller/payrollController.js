@@ -7,120 +7,270 @@ const SalaryRule = require('../models/SalaryRuleModel');
 // -------------------- Calculate Salary Automatically --------------------
 const calculateSalary = async (employeeId, periodStart, periodEnd) => {
   try {
-    // Fetch employee
-    const employee = await User.findById(employeeId);
-    if (!employee) return null;
+    // Fetch employee with salary details
+    const employee = await User.findById(employeeId)
+      .populate('salaryRule')
+      .populate('manager', 'firstName lastName');
+    
+    if (!employee) {
+      throw new Error('Employee not found');
+    }
 
-    // Get salary rules from database
-    const salaryRule = await SalaryRule.findOne().sort({ createdAt: -1 });
+    // Get default salary rule if employee doesn't have specific rule
+    let salaryRule;
+    if (employee.salaryRule) {
+      salaryRule = employee.salaryRule;
+    } else {
+      salaryRule = await SalaryRule.findOne({ isActive: true }).sort({ createdAt: -1 });
+    }
+
     if (!salaryRule) {
       throw new Error('Salary rules not configured');
     }
 
-    const rules = salaryRule.rules;
+    // Extract rules from salaryRule model (Updated structure)
+    const rules = salaryRule.toObject();
     const workingDaysPerMonth = salaryRule.workingDaysPerMonth || 26;
-    const perDaySalaryCalculation = salaryRule.perDaySalaryCalculation || true;
+    const perDaySalaryCalculation = salaryRule.perDaySalaryCalculation !== false; // Default true
 
-    // Get employee's annual salary from user model
-    const annualSalary = employee.salary || 0;
-    const monthlyBasic = annualSalary / 12;
+    // Calculate employee's monthly salary
+    let monthlyBasic = 0;
+    
+    if (employee.salary > 0) {
+      // If salary field exists in user model
+      monthlyBasic = employee.salary;
+    } else if (employee.rate > 0) {
+      // Calculate based on rate and salaryType
+      switch(employee.salaryType) {
+        case 'hourly':
+          // Default: 8 hours/day, workingDaysPerMonth days/month
+          monthlyBasic = employee.rate * 8 * workingDaysPerMonth;
+          break;
+        case 'daily':
+          monthlyBasic = employee.rate * workingDaysPerMonth;
+          break;
+        case 'weekly':
+          monthlyBasic = employee.rate * 4; // 4 weeks per month
+          break;
+        case 'monthly':
+          monthlyBasic = employee.rate;
+          break;
+        case 'project':
+          // For project-based, use the rate as fixed monthly
+          monthlyBasic = employee.rate;
+          break;
+        default:
+          monthlyBasic = employee.rate || 0;
+      }
+    } else {
+      // Use salary rule's default rate
+      monthlyBasic = salaryRule.rate || 0;
+    }
 
     // Calculate attendance for the period
     const attendanceRecords = await Attendance.find({
       employee: employeeId,
-      date: { $gte: periodStart, $lte: periodEnd },
-      status: 'Present'
+      date: { 
+        $gte: new Date(periodStart), 
+        $lte: new Date(periodEnd) 
+      }
     });
-    
-    const presentDays = attendanceRecords.length;
-    const attendancePercentage = (presentDays / workingDaysPerMonth) * 100;
 
-    // Calculate leave days for the period
-    const leaveRecords = await Leave.find({
+    // Count different attendance statuses
+    const presentDays = attendanceRecords.filter(record => 
+      ['Present', 'Clocked In', 'Late'].includes(record.status)
+    ).length;
+    
+    const absentDays = attendanceRecords.filter(record => 
+      record.status === 'Absent'
+    ).length;
+    
+    const lateDays = attendanceRecords.filter(record => 
+      record.status === 'Late'
+    ).length;
+    
+    const leaveRecords = attendanceRecords.filter(record => 
+      record.status === 'Leave'
+    ).length;
+
+    const attendancePercentage = workingDaysPerMonth > 0 
+      ? (presentDays / workingDaysPerMonth) * 100 
+      : 0;
+
+    // Calculate approved leave days for the period from Leave model
+    const approvedLeaves = await Leave.find({
       employee: employeeId,
       status: 'Approved',
-      startDate: { $lte: periodEnd },
-      endDate: { $gte: periodStart }
+      $or: [
+        { startDate: { $lte: periodEnd, $gte: periodStart } },
+        { endDate: { $lte: periodEnd, $gte: periodStart } },
+        { 
+          startDate: { $lte: periodStart },
+          endDate: { $gte: periodEnd }
+        }
+      ]
     });
 
-    let leaveDays = 0;
-    leaveRecords.forEach(leave => {
+    let totalLeaveDays = 0;
+    approvedLeaves.forEach(leave => {
       const start = new Date(Math.max(new Date(leave.startDate), new Date(periodStart)));
       const end = new Date(Math.min(new Date(leave.endDate), new Date(periodEnd)));
       const diffTime = Math.abs(end - start);
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      leaveDays += diffDays;
+      totalLeaveDays += diffDays;
     });
 
     // Calculate basic pay based on attendance
     let calculatedBasic = monthlyBasic;
-    if (perDaySalaryCalculation) {
+    
+    if (perDaySalaryCalculation && workingDaysPerMonth > 0) {
       calculatedBasic = (monthlyBasic / workingDaysPerMonth) * presentDays;
     }
 
-    // Calculate all components based on rules
-    const calculations = {};
-    
-    // Calculate each component from rules
-    if (rules.components && Array.isArray(rules.components)) {
-      rules.components.forEach(component => {
+    // Calculate all components based on salary rule structure
+    const components = {};
+    let totalAddition = 0;
+    let totalDeduction = 0;
+
+    // Handle different salary rule structures
+    if (salaryRule.components && Array.isArray(salaryRule.components)) {
+      salaryRule.components.forEach(component => {
+        let amount = 0;
+        
         if (component.type === 'percentage') {
-          calculations[component.name] = (calculatedBasic * component.value) / 100;
+          amount = (calculatedBasic * component.value) / 100;
         } else if (component.type === 'fixed') {
-          calculations[component.name] = component.value;
-        } else if (component.type === 'formula') {
-          // You can add custom formula logic here
-          calculations[component.name] = eval(component.formula.replace(/basic/g, calculatedBasic));
+          amount = component.value;
+        } else if (component.type === 'attendance_based') {
+          // Example: Bonus based on attendance percentage
+          if (component.condition === 'attendance_above_95' && attendancePercentage >= 95) {
+            amount = component.value;
+          }
+        }
+        
+        components[component.name] = amount;
+        
+        if (component.category === 'addition') {
+          totalAddition += amount;
+        } else if (component.category === 'deduction') {
+          totalDeduction += amount;
         }
       });
+    }
+
+    // Calculate overtime if enabled
+    let overtimeAmount = 0;
+    if (salaryRule.overtimeEnabled && salaryRule.overtimeRate) {
+      // Calculate overtime hours from attendance records
+      let totalOvertimeHours = 0;
+      
+      attendanceRecords.forEach(record => {
+        if (record.totalHours > 8) { // Assuming 8 hours is standard work day
+          totalOvertimeHours += (record.totalHours - 8);
+        }
+      });
+      
+      overtimeAmount = totalOvertimeHours * salaryRule.overtimeRate;
+      totalAddition += overtimeAmount;
+      components['Overtime'] = overtimeAmount;
+    }
+
+    // Calculate leave deductions if enabled
+    let leaveDeduction = 0;
+    if (salaryRule.leaveRule && salaryRule.leaveRule.enabled) {
+      const paidLeaves = salaryRule.leaveRule.paidLeaves || 0;
+      const perDayDeduction = salaryRule.leaveRule.perDayDeduction || 0;
+      
+      if (totalLeaveDays > paidLeaves) {
+        const extraLeaves = totalLeaveDays - paidLeaves;
+        leaveDeduction = extraLeaves * perDayDeduction;
+        totalDeduction += leaveDeduction;
+        components['Leave Deduction'] = leaveDeduction;
+      }
+    }
+
+    // Calculate late deductions if enabled
+    let lateDeduction = 0;
+    if (salaryRule.lateRule && salaryRule.lateRule.enabled) {
+      const lateThreshold = salaryRule.lateRule.lateDaysThreshold || 3;
+      const equivalentLeaveDays = salaryRule.lateRule.equivalentLeaveDays || 0.5;
+      const perDaySalary = monthlyBasic / workingDaysPerMonth;
+      
+      if (lateDays > lateThreshold) {
+        const extraLateDays = lateDays - lateThreshold;
+        const equivalentLeaveCount = extraLateDays * equivalentLeaveDays;
+        lateDeduction = equivalentLeaveCount * perDaySalary;
+        totalDeduction += lateDeduction;
+        components['Late Deduction'] = lateDeduction;
+      }
+    }
+
+    // Add bonus if conditions met
+    let bonusAmount = 0;
+    if (salaryRule.bonusAmount && salaryRule.bonusConditions) {
+      // Example: Check bonus conditions
+      const conditions = salaryRule.bonusConditions.toLowerCase();
+      let bonusEligible = true;
+      
+      if (conditions.includes('attendance_above_90') && attendancePercentage < 90) {
+        bonusEligible = false;
+      }
+      if (conditions.includes('no_late') && lateDays > 0) {
+        bonusEligible = false;
+      }
+      
+      if (bonusEligible) {
+        bonusAmount = salaryRule.bonusAmount;
+        totalAddition += bonusAmount;
+        components['Performance Bonus'] = bonusAmount;
+      }
     }
 
     // Calculate net payable
-    let totalAddition = 0;
-    let totalDeduction = 0;
-    
-    if (rules.additions && Array.isArray(rules.additions)) {
-      rules.additions.forEach(addition => {
-        if (addition.type === 'percentage') {
-          totalAddition += (calculatedBasic * addition.value) / 100;
-        } else if (addition.type === 'fixed') {
-          totalAddition += addition.value;
-        }
-      });
-    }
-    
-    if (rules.deductions && Array.isArray(rules.deductions)) {
-      rules.deductions.forEach(deduction => {
-        if (deduction.type === 'percentage') {
-          totalDeduction += (calculatedBasic * deduction.value) / 100;
-        } else if (deduction.type === 'fixed') {
-          totalDeduction += deduction.value;
-        }
-      });
-    }
-
     const netPayable = calculatedBasic + totalAddition - totalDeduction;
 
     return {
-      basicPay: calculatedBasic,
+      basicPay: parseFloat(calculatedBasic.toFixed(2)),
+      monthlyBasic: parseFloat(monthlyBasic.toFixed(2)),
       presentDays,
+      absentDays,
+      lateDays,
+      leaveDays: totalLeaveDays,
       totalWorkingDays: workingDaysPerMonth,
-      attendancePercentage,
-      leaveDays,
-      totalAddition,
-      totalDeduction,
-      netPayable,
-      components: calculations,
+      attendancePercentage: parseFloat(attendancePercentage.toFixed(2)),
+      totalAddition: parseFloat(totalAddition.toFixed(2)),
+      totalDeduction: parseFloat(totalDeduction.toFixed(2)),
+      netPayable: parseFloat(netPayable.toFixed(2)),
+      components,
+      overtime: {
+        enabled: salaryRule.overtimeEnabled,
+        amount: parseFloat(overtimeAmount.toFixed(2)),
+        rate: salaryRule.overtimeRate
+      },
+      leaveDeduction: parseFloat(leaveDeduction.toFixed(2)),
+      lateDeduction: parseFloat(lateDeduction.toFixed(2)),
+      bonusAmount: parseFloat(bonusAmount.toFixed(2)),
       rulesApplied: {
         salaryRuleId: salaryRule._id,
-        ruleName: salaryRule.ruleName,
+        ruleName: salaryRule.title || salaryRule.ruleName,
         calculationMethod: perDaySalaryCalculation ? 'Per Day' : 'Monthly Fixed'
+      },
+      employeeDetails: {
+        employeeId: employee.employeeId,
+        name: employee.fullName || `${employee.firstName} ${employee.lastName}`,
+        department: employee.department,
+        designation: employee.designation
+      },
+      calculationPeriod: {
+        start: periodStart,
+        end: periodEnd,
+        daysInPeriod: Math.ceil((new Date(periodEnd) - new Date(periodStart)) / (1000 * 60 * 60 * 24)) + 1
       },
       calculatedDate: new Date()
     };
   } catch (error) {
     console.error('Salary calculation error:', error);
-    return null;
+    throw error; // Re-throw the error for better debugging
   }
 };
 

@@ -1,42 +1,77 @@
+// models/SalaryRuleModel.js
 const mongoose = require('mongoose');
 
-const SalaryRuleSchema = new mongoose.Schema({
+const salaryRuleSchema = new mongoose.Schema({
   title: {
     type: String,
     required: [true, 'Title is required'],
-    trim: true,
-    maxlength: [100, 'Title cannot exceed 100 characters']
+    trim: true
   },
   
+  description: {
+    type: String,
+    trim: true
+  },
+  
+  // Salary calculation method
   salaryType: {
     type: String,
-    required: [true, 'Salary type is required'],
-    enum: ['Monthly', 'Hourly', 'Project', 'Daily', 'Weekly'],
-    default: 'Monthly'
+    enum: ['hourly', 'daily', 'weekly', 'monthly', 'project'],
+    default: 'monthly'
   },
   
   rate: {
     type: Number,
     required: [true, 'Rate is required'],
-    min: [0, 'Rate cannot be negative'],
-    default: 0
+    min: [0, 'Rate cannot be negative']
   },
   
-  description: {
-    type: String,
-    trim: true,
-    maxlength: [500, 'Description cannot exceed 500 characters']
+  // Working days per month for calculation
+  workingDaysPerMonth: {
+    type: Number,
+    default: 26,
+    min: [1, 'Working days must be at least 1']
   },
+  
+  // Whether to calculate per day or fixed monthly
+  perDaySalaryCalculation: {
+    type: Boolean,
+    default: true
+  },
+  
+  // Salary components (House Rent, Medical Allowance, etc.)
+  components: [{
+    name: {
+      type: String,
+      required: true
+    },
+    type: {
+      type: String,
+      enum: ['percentage', 'fixed', 'attendance_based'],
+      default: 'percentage'
+    },
+    value: {
+      type: Number,
+      required: true
+    },
+    category: {
+      type: String,
+      enum: ['addition', 'deduction'],
+      default: 'addition'
+    },
+    condition: String, // Optional condition for calculation
+    description: String
+  }],
   
   // Overtime rules
+  overtimeEnabled: {
+    type: Boolean,
+    default: false
+  },
   overtimeRate: {
     type: Number,
     min: [0, 'Overtime rate cannot be negative'],
     default: 0
-  },
-  overtimeEnabled: {
-    type: Boolean,
-    default: false
   },
   
   // Leave rules
@@ -45,14 +80,14 @@ const SalaryRuleSchema = new mongoose.Schema({
       type: Boolean,
       default: false
     },
-    perDayDeduction: {
-      type: Number,
-      min: [0, 'Per day deduction cannot be negative'],
-      default: 0
-    },
     paidLeaves: {
       type: Number,
       min: [0, 'Paid leaves cannot be negative'],
+      default: 0
+    },
+    perDayDeduction: {
+      type: Number,
+      min: [0, 'Per day deduction cannot be negative'],
       default: 0
     }
   },
@@ -92,18 +127,16 @@ const SalaryRuleSchema = new mongoose.Schema({
     default: true
   },
   
-  // Additional fields
-  department: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Department'
-  },
-  
+  // Who can use this rule
   applicableTo: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
   
-  // Timestamps
+  department: {
+    type: String
+  },
+  
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -119,13 +152,13 @@ const SalaryRuleSchema = new mongoose.Schema({
     default: Date.now
   }
 }, {
-  timestamps: true // This will auto-add createdAt and updatedAt
+  timestamps: true
 });
 
-// Update the updatedAt field before saving
-SalaryRuleSchema.pre('save', function(next) {
+// Update timestamp
+salaryRuleSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
   next();
 });
 
-module.exports = mongoose.model('SalaryRule', SalaryRuleSchema);
+module.exports = mongoose.model('SalaryRule', salaryRuleSchema);
