@@ -174,17 +174,42 @@ const userSchema = new mongoose.Schema(
     }
   }
 );
- 
-// 🔹 **Password Comparison Method (First model থেকে নেওয়া)**
+
+// ✅ **সঠিক Password Hashing (একবারই রাখুন)**
+userSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) return next();
+  
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ✅ **সঠিক Password Comparison Method (একবারই রাখুন)**
 userSchema.methods.matchPassword = async function (enteredPassword) {
   try {
-    // ✅ bcrypt.compare ব্যবহার করুন
-    return await bcrypt.compare(enteredPassword, this.password);
+    console.log('🔐 matchPassword called:');
+    console.log('- Entered password:', enteredPassword);
+    console.log('- Stored hash exists:', !!this.password);
+    console.log('- Hash starts with $2:', this.password?.startsWith('$2'));
+    
+    if (!this.password) {
+      console.log('❌ No password stored for user');
+      return false;
+    }
+    
+    const result = await bcrypt.compare(enteredPassword, this.password);
+    console.log('- bcrypt.compare result:', result);
+    return result;
+    
   } catch (error) {
-    console.error('Password comparison error:', error);
+    console.error('❌ matchPassword error:', error);
     return false;
   }
-}; 
+};
 
 // Virtual for full name
 userSchema.virtual('fullName').get(function() {
@@ -272,28 +297,5 @@ userSchema.statics.emailExists = async function(email) {
   const user = await this.findOne({ email: email.toLowerCase().trim() });
   return !!user;
 };
-
-// ✅ **সঠিক Password Hashing (আগের model থেকে)**
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
-  
-  try {
-    const salt = await bcrypt.genSalt(10);  // এই line টি crucial
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
-
-// ✅ **সঠিক Password Comparison (আগের model থেকে)**
-userSchema.methods.matchPassword = async function (password) {
-  return await bcrypt.compare(password, this.password);  // await টি important
-};
-
-// Optional: Basic virtuals (নতুন model থেকে)
-userSchema.virtual('fullName').get(function() {
-  return `${this.firstName} ${this.lastName}`;
-});
 
 module.exports = mongoose.model("User", userSchema);

@@ -1081,16 +1081,16 @@ exports.getUserStatistics = async (req, res) => {
 
 // ================= USER CONTROLLERS =================
 
-// User Login
+// User Login 
 exports.userLogin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    console.log('🔐 USER LOGIN ATTEMPT - DEBUG MODE');
-    console.log('Email:', email);
-    console.log('Password length:', password?.length);
+    console.log('🚀 SIMPLE LOGIN ATTEMPT');
+    console.log('- Email:', email);
+    console.log('- Password provided:', !!password);
 
-    // Input validation
+    // 1. Basic validation
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -1101,134 +1101,118 @@ exports.userLogin = async (req, res) => {
     const emailClean = email.toLowerCase().trim();
     const passwordClean = password.trim();
 
-    // Find user
-    console.log('🔍 Searching user with email:', emailClean);
-    const user = await User.findOne({
+    console.log('- Clean email:', emailClean);
+    console.log('- Clean password length:', passwordClean.length);
+
+    // 2. Find user (simple query)
+    const user = await User.findOne({ 
       email: emailClean,
-      isDeleted: false
+      role: 'employee'  // শুধু employee খুঁজবে
     });
 
+    console.log('- User found:', !!user);
+    
     if (!user) {
-      console.log('❌ User not found in database');
       return res.status(401).json({
         success: false,
         message: "Invalid email or password"
       });
     }
 
-    console.log('✅ User found:', {
-      id: user._id,
-      email: user.email,
-      role: user.role,
-      status: user.status,
-      isActive: user.isActive,
-      passwordHashExists: !!user.password,
-      passwordHashLength: user.password?.length,
-      passwordHashPrefix: user.password?.substring(0, 30) + '...'
-    });
+    // 3. User details log
+    console.log('📋 USER DETAILS:');
+    console.log('- ID:', user._id);
+    console.log('- Email:', user.email);
+    console.log('- Role:', user.role);
+    console.log('- Status:', user.status);
+    console.log('- isActive:', user.isActive);
+    console.log('- Password exists:', !!user.password);
+    console.log('- Password length:', user.password?.length);
+    console.log('- Is bcrypt hash?:', user.password?.startsWith('$2'));
+    console.log('- Password first 30 chars:', user.password?.substring(0, 30) + '...');
 
-    // Check user role
-    if (user.role.toLowerCase() !== "employee") {
-      console.log('❌ Invalid role:', user.role);
+    // 4. Check account status
+    if (user.status !== "active" || !user.isActive) {
+      console.log('❌ Account not active');
       return res.status(403).json({
         success: false,
-        message: "Access restricted to employees only"
+        message: "Account is not active"
       });
     }
 
-    // Check account status
-    if (user.status !== "active" || user.isActive !== true) {
-      console.log('❌ Account not active:', {
-        status: user.status,
-        isActive: user.isActive
-      });
-      return res.status(403).json({
-        success: false,
-        message: "Account is not active. Please contact administrator."
-      });
-    }
-
-    // 🔹 **Password verification - FIXED VERSION**
-    console.log('🔐 Password verification process:');
-    console.log('- Input password:', passwordClean);
-    console.log('- Stored password type:', user.password?.substring(0, 30) + '...');
+    // 5. Password verification - SIMPLE AND RELIABLE
+    console.log('🔐 PASSWORD VERIFICATION:');
     
-    let isMatch = false;
-    let usedMethod = '';
+    let passwordValid = false;
     
-    try {
-      // Method 1: Try the matchPassword method first
-      console.log('- Trying matchPassword method...');
-      if (typeof user.matchPassword === 'function') {
-        isMatch = await user.matchPassword(passwordClean);
-        usedMethod = 'matchPassword';
-        console.log('- matchPassword result:', isMatch);
+    // Option A: Use matchPassword method
+    if (typeof user.matchPassword === 'function') {
+      console.log('- Using matchPassword() method');
+      try {
+        passwordValid = await user.matchPassword(passwordClean);
+        console.log('- matchPassword result:', passwordValid);
+      } catch (methodError) {
+        console.log('- matchPassword error:', methodError.message);
       }
-      
-      // Method 2: If matchPassword doesn't work or returns false, try direct bcrypt
-      if (!isMatch && user.password && user.password.startsWith('$2')) {
-        console.log('- Trying direct bcrypt.compare...');
-        isMatch = await bcrypt.compare(passwordClean, user.password);
-        usedMethod = 'directBcrypt';
-        console.log('- bcrypt.compare result:', isMatch);
-      }
-      
-      // Method 3: If still not matching, check if password is plain text
-      if (!isMatch && user.password && !user.password.startsWith('$2')) {
-        console.log('- Trying plain text comparison...');
-        isMatch = passwordClean === user.password;
-        usedMethod = 'plainText';
-        console.log('- Plain text comparison result:', isMatch);
-        
-        // If plain text matches, migrate to bcrypt
-        if (isMatch) {
-          console.log('🔄 Migrating plain password to bcrypt...');
-          const salt = await bcrypt.genSalt(10);
-          user.password = await bcrypt.hash(passwordClean, salt);
-          await user.save();
-          console.log('✅ Password migrated to bcrypt');
-        }
-      }
-      
-    } catch (passwordError) {
-      console.error('❌ Password verification error:', passwordError);
-      return res.status(500).json({
-        success: false,
-        message: "Authentication system error"
-      });
     }
     
-    console.log('- Final password check result:', isMatch);
-    console.log('- Method used:', usedMethod);
+    // Option B: Direct bcrypt compare (if matchPassword fails)
+    if (!passwordValid && user.password?.startsWith('$2')) {
+      console.log('- Using direct bcrypt.compare()');
+      try {
+        passwordValid = await bcrypt.compare(passwordClean, user.password);
+        console.log('- bcrypt.compare result:', passwordValid);
+      } catch (bcryptError) {
+        console.log('- bcrypt.compare error:', bcryptError.message);
+      }
+    }
+    
+    // Option C: Plain text fallback
+    if (!passwordValid && user.password) {
+      console.log('- Trying plain text comparison');
+      passwordValid = (passwordClean === user.password);
+      console.log('- Plain text result:', passwordValid);
+      
+      // Convert to bcrypt if plain text matches
+      if (passwordValid) {
+        console.log('🔄 Converting plain text to bcrypt...');
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(passwordClean, salt);
+        await user.save();
+        console.log('✅ Password converted');
+      }
+    }
 
-    if (!isMatch) {
-      console.log('❌ All password verification methods failed');
+    // 6. If password still not valid
+    if (!passwordValid) {
+      console.log('❌ ALL PASSWORD METHODS FAILED');
       return res.status(401).json({
         success: false,
         message: "Invalid email or password"
       });
     }
 
-    console.log('✅ Password verified successfully');
+    console.log('✅ PASSWORD VALID');
 
-    // Generate token
+    // 7. Generate token
     const token = generateToken(user);
+    console.log('✅ TOKEN GENERATED');
 
-    // Update last login
+    // 8. Update user
     user.lastLogin = new Date();
     user.loginCount = (user.loginCount || 0) + 1;
     await user.save();
 
-    // Return response
-    res.status(200).json({
+    // 9. Prepare response
+    const response = {
       success: true,
       message: "Login successful",
-      token,
+      token: token,
       user: {
         id: user._id,
         firstName: user.firstName,
         lastName: user.lastName,
-        fullName: `${user.firstName} ${user.lastName}`.trim(),
+        fullName: `${user.firstName} ${user.lastName}`,
         email: user.email,
         role: user.role,
         department: user.department,
@@ -1238,17 +1222,24 @@ exports.userLogin = async (req, res) => {
         phone: user.phone,
         status: user.status,
         isActive: user.isActive,
-        lastLogin: user.lastLogin,
-        loginCount: user.loginCount
+        lastLogin: user.lastLogin
       }
-    });
+    };
+
+    console.log('🎉 LOGIN SUCCESS!');
+    console.log('User logged in:', user.email);
+    
+    return res.status(200).json(response);
 
   } catch (error) {
-    console.error("❌ LOGIN ERROR:", error);
-    res.status(500).json({
+    console.error('💥 LOGIN CRASH:', error);
+    console.error('- Error name:', error.name);
+    console.error('- Error message:', error.message);
+    console.error('- Error stack:', error.stack);
+    
+    return res.status(500).json({
       success: false,
-      message: "Login failed",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Login failed. Please try again."
     });
   }
 };
