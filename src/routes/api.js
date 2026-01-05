@@ -121,11 +121,11 @@ router.post('/admin/generate/monthly', protect, adminOnly, payrollController.gen
 router.get('/active', protect, salaryRuleController.getActiveSalaryRules);
 
 // Admin routes
-router.get('/', protect, adminOnly, salaryRuleController.getAllSalaryRules);
-router.get('/:id', protect, adminOnly, salaryRuleController.getSalaryRuleById);
-router.post('/', protect, adminOnly, salaryRuleController.createSalaryRule);
-router.put('/:id', protect, adminOnly, salaryRuleController.updateSalaryRule);
-router.delete('/:id', protect, adminOnly, salaryRuleController.deleteSalaryRule);
+router.get('/getSalaryRule/', protect, adminOnly, salaryRuleController.getAllSalaryRules);
+router.get('/getSalaryRule/:id', protect, adminOnly, salaryRuleController.getSalaryRuleById);
+router.post('/createSalaryRule/', protect, adminOnly, salaryRuleController.createSalaryRule);
+router.put('/updateSalaryRule/:id', protect, adminOnly, salaryRuleController.updateSalaryRule);
+router.delete('deleteSalaryRule/:id', protect, adminOnly, salaryRuleController.deleteSalaryRule);
 router.put('/:id/toggle-status', protect, adminOnly, salaryRuleController.toggleActiveStatus);
 
 // ====================AuditLog Admin Routes ==================== 
