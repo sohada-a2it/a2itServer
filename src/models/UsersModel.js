@@ -130,12 +130,6 @@ const userSchema = new mongoose.Schema(
     enum: ['Permanent', 'Contractual', 'Probation', 'Part-time', 'Intern'],
     default: 'Permanent'
   },
-  
-  salaryType: {
-    type: String,
-    enum: ['Monthly', 'Weekly', 'Daily', 'Hourly', 'Project'],
-    default: 'Monthly'
-  },
 
     // ============ ADMIN-SPECIFIC FIELDS ============
     companyName: {
