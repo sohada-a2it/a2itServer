@@ -185,9 +185,9 @@ router.delete('/overrideDelete/:id', protect, adminOnly, OfficeSchedule.deleteOv
 
 // Reports routes
 // backend routes (Node.js/Express)
-router.get('/api/reports/employees', protect, adminOnly, getEmployeesForReport);
-router.get('/api/reports/departments', protect, adminOnly, getDepartmentsForReport);
-router.post('/api/reports/attendance', protect, adminOnly, exportAttendanceReport);
-router.post('/api/reports/payroll', protect, adminOnly, exportPayrollReport);
-router.post('/api/reports/employee-summary', protect, adminOnly, exportEmployeeSummaryReport);
+router.get('/api/reports/employees', protect, adminOnly, reportController.getEmployeesForReport);
+router.get('/api/reports/departments', protect, adminOnly, reportController.getDepartmentsForReport);
+router.post('/api/reports/attendance', protect, adminOnly, reportController.exportAttendanceReport);
+router.post('/api/reports/payroll', protect, adminOnly, reportController.exportPayrollReport);
+router.post('/api/reports/employee-summary', protect, adminOnly, reportController.exportEmployeeSummaryReport);
 module.exports = router;  
