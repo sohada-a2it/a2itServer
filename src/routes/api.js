@@ -182,9 +182,9 @@ router.delete('/override/:id', protect, adminOnly, OfficeSchedule.deleteOverride
 
 
 // Reports routes
-router.get('/employees', protect, reportController.getEmployeesForReport);
-router.get('/departments', protect, reportController.getDepartmentsForReport);
-router.post('/attendance', protect, reportController.exportAttendanceReport);
-router.post('/payroll', protect, reportController.exportPayrollReport);
-router.post('/employee-summary', protect, reportController.exportEmployeeSummaryReport);
+router.get('/employees', protect,adminOnly, reportController.getEmployeesForReport);
+router.get('/departments', protect,adminOnly, reportController.getDepartmentsForReport);
+router.post('/attendance', protect,adminOnly, reportController.exportAttendanceReport);
+router.post('/payroll', protect,adminOnly, reportController.exportPayrollReport);
+router.post('/employee-summary', protect,adminOnly, reportController.exportEmployeeSummaryReport);
 module.exports = router;  
