@@ -1,73 +1,149 @@
-// lib/api.js
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+// /app/lib/report.js
 
-export const getToken = () => {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("adminToken") || localStorage.getItem("employeeToken");
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+// Test API connection
+export const testApiConnection = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/health`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      return { success: true, message: data.message || 'Connected successfully' };
+    } else {
+      return { 
+        success: false, 
+        message: `Server responded with status: ${response.status}` 
+      };
+    }
+  } catch (error) {
+    console.error('Connection test failed:', error);
+    return { 
+      success: false, 
+      message: error.message || 'Cannot connect to backend server' 
+    };
+  }
 };
 
-// Employees API
+// Fetch employees
 export const fetchEmployees = async () => {
   try {
-    const token = getToken();
-    const response = await fetch(`${API_URL}/reports/employees`, {
+    const token = localStorage.getItem("adminToken") || localStorage.getItem("employeeToken");
+    const response = await fetch(`${API_BASE_URL}/api/reports/employees`, {
+      method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
     });
-    
-    const data = await response.json();
-    return data.success ? data.data : [];
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
   } catch (error) {
     console.error('Error fetching employees:', error);
-    return [];
+    throw error;
   }
 };
 
-// Departments API
+// Fetch departments
 export const fetchDepartments = async () => {
   try {
-    const token = getToken();
-    const response = await fetch(`${API_URL}/reports/departments`, {
+    const token = localStorage.getItem("adminToken") || localStorage.getItem("employeeToken");
+    const response = await fetch(`${API_BASE_URL}/api/reports/departments`, {
+      method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
     });
-    
-    const data = await response.json();
-    return data.success ? data.data : [];
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
   } catch (error) {
     console.error('Error fetching departments:', error);
-    return [];
+    throw error;
   }
 };
 
-// Export Report API
+// Export report - UPDATED VERSION
 export const exportReport = async (reportType, format, filters) => {
   try {
-    const token = getToken();
-    const endpoint = `${API_URL}/reports/${reportType}`;
+    const token = localStorage.getItem("adminToken") || localStorage.getItem("employeeToken");
     
-    const response = await fetch(endpoint, {
+    if (!token) {
+      throw new Error('Authentication token not found. Please login again.');
+    }
+
+    // Map report types to correct endpoints
+    const endpointMap = {
+      "attendance": "/api/reports/attendance",
+      "payroll": "/api/reports/payroll",
+      "employee-summary": "/api/reports/employee-summary"
+    };
+
+    const endpoint = endpointMap[reportType];
+    
+    if (!endpoint) {
+      throw new Error(`Invalid report type: ${reportType}`);
+    }
+
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
-        'Accept': format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ format, ...filters })
+      body: JSON.stringify({
+        ...filters,
+        format: format.toLowerCase() // Ensure format is lowercase
+      })
     });
-    
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP ${response.status}`);
+      const errorText = await response.text();
+      let errorMessage = `HTTP error! status: ${response.status}`;
+      
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.message || errorMessage;
+      } catch {
+        errorMessage = errorText || errorMessage;
+      }
+      
+      throw new Error(errorMessage);
     }
+
+    // Check content type
+    const contentType = response.headers.get('content-type');
     
-    return await response.blob();
+    // Handle different response types
+    if (contentType.includes('application/json')) {
+      return await response.json();
+    } else if (contentType.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')) {
+      return await response.blob();
+    } else if (contentType.includes('application/pdf')) {
+      return await response.blob();
+    } else if (contentType.includes('text/csv')) {
+      return await response.blob();
+    } else {
+      // Default to blob
+      return await response.blob();
+    }
   } catch (error) {
-    console.error('Export error:', error);
+    console.error('Export failed:', error);
     throw error;
   }
 };
