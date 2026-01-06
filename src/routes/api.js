@@ -12,6 +12,7 @@ const leaveController = require('../controller/leaveController');
 const salaryRuleController = require('../controller/salaryRuleController'); 
 const OfficeSchedule = require('../controller/officeScheduleController');  
 const profileController = require('../controller/profileController');  
+const reportController = require('../controller/reportController');  
 const upload = require('../middleware/multer');  
 const { protect, adminOnly } = require("../middleware/AuthVerifyMiddleWare"); 
 
@@ -170,8 +171,20 @@ router.get('/admin/export', adminOnly, sessionController.exportAllSessions);
 
 
 // =================== WeaklyOff Routes ====================
-router.get("/getWeekly-off", protect, OfficeSchedule.getWeeklyOff);
-router.put("/updateWeekly-off",protect, adminOnly, OfficeSchedule.updateWeeklyOff); 
-router.put("/override", protect, adminOnly, OfficeSchedule.createOrUpdateOverride);
+// Public routes
+router.get('/weekly-off', protect, OfficeSchedule.getWeeklyOff);
 
+// Admin routes
+router.put('/weekly-off', protect, adminOnly, OfficeSchedule.updateWeeklyOff);
+router.put('/override', protect, adminOnly, OfficeSchedule.createOrUpdateOverride);
+router.get('/override/history', protect, adminOnly, OfficeSchedule.getOverrideHistory);
+router.delete('/override/:id', protect, adminOnly, OfficeSchedule.deleteOverride);
+
+
+// Reports routes
+router.get('/employees', protect, reportController.getEmployeesForReport);
+router.get('/departments', protect, reportController.getDepartmentsForReport);
+router.post('/attendance', protect, reportController.exportAttendanceReport);
+router.post('/payroll', protect, reportController.exportPayrollReport);
+router.post('/employee-summary', protect, reportController.exportEmployeeSummaryReport);
 module.exports = router;  
