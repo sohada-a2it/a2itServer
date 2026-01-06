@@ -1,112 +1,44 @@
+// AttendanceModel.js - new version
 const mongoose = require('mongoose');
 
-const payrollSchema = new mongoose.Schema({
-  // Employee Reference
-  employee: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+const attendanceSchema = new mongoose.Schema({
+  employee: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User', 
+    required: true 
+  },
+  date: { 
+    type: Date, 
+    required: true 
+  },
+  clockIn: { 
+    type: Date 
+  },
+  clockOut: { 
+    type: Date 
+  },
+  totalHours: { 
+    type: Number, 
+    default: 0 
   },
   
-  // Pay Period
-  periodStart: {
-    type: Date,
-    required: true
+  // Status with more detailed options
+  status: { 
+    type: String, 
+    enum: ['Present', 'Absent', 'Leave', 'Govt Holiday', 'Weekly Off', 'Off Day', 'Late', 'Half Day', 'Clocked In', 'Auto Clocked In'], 
+    default: 'Absent' 
   },
   
-  periodEnd: {
-    type: Date,
-    required: true
-  },
-  
-  // ===== ATTENDANCE DATA (From Attendance/Leave records) =====
-  attendanceData: {
-    totalWorkingDays: {
+  // Detailed tracking for payroll
+  payrollMetrics: {
+    // Auto-calculated daily salary
+    dailyEarnings: {
       type: Number,
       default: 0
     },
-    presentDays: {
-      type: Number,
-      default: 0
-    },
-    absentDays: {
-      type: Number,
-      default: 0
-    },
-    halfDays: {
-      type: Number,
-      default: 0
-    },
-    lateDays: {
-      type: Number,
-      default: 0
-    },
-    leaveDays: {
-      type: Number,
-      default: 0
-    },
-    leaveTypes: [{
-      type: String, // 'sick', 'casual', 'earned'
-      days: Number
-    }],
-    holidays: {
-      type: Number,
-      default: 0
-    },
+    
+    // Overtime details
     overtimeHours: {
-      type: Number,
-      default: 0
-    },
-    attendancePercentage: {
-      type: Number,
-      default: 0
-    }
-  },
-  
-  // ===== SALARY STRUCTURE =====
-  salaryStructure: {
-    basicSalary: {
-      type: Number,
-      required: true,
-      min: 0
-    },
-    houseRent: {
-      type: Number,
-      default: 0
-    },
-    medicalAllowance: {
-      type: Number,
-      default: 0
-    },
-    conveyance: {
-      type: Number,
-      default: 0
-    },
-    otherAllowances: {
-      type: Number,
-      default: 0
-    },
-    grossSalary: {
-      type: Number,
-      default: 0
-    }
-  },
-  
-  // ===== EARNINGS/ADDITIONS =====
-  earnings: {
-    basicPay: {
-      type: Number,
-      default: 0
-    },
-    houseRent: {
-      type: Number,
-      default: 0
-    },
-    medicalAllowance: {
-      type: Number,
-      default: 0
-    },
-    conveyance: {
       type: Number,
       default: 0
     },
@@ -114,27 +46,9 @@ const payrollSchema = new mongoose.Schema({
       type: Number,
       default: 0
     },
-    bonus: {
-      type: Number,
-      default: 0
-    },
-    incentives: {
-      type: Number,
-      default: 0
-    },
-    otherAdditions: {
-      type: Number,
-      default: 0
-    },
-    totalEarnings: {
-      type: Number,
-      default: 0
-    }
-  },
-  
-  // ===== DEDUCTIONS =====
-  deductions: {
-    absentDeduction: {
+    
+    // Late details
+    lateMinutes: {
       type: Number,
       default: 0
     },
@@ -142,234 +56,166 @@ const payrollSchema = new mongoose.Schema({
       type: Number,
       default: 0
     },
+    
+    // Deductions
+    absentDeduction: {
+      type: Number,
+      default: 0
+    },
     halfDayDeduction: {
       type: Number,
       default: 0
     },
-    unpaidLeaveDeduction: {
+    
+    // Total for the day
+    netDailyAmount: {
       type: Number,
       default: 0
     },
-    advanceDeduction: {
-      type: Number,
-      default: 0
-    },
-    taxDeduction: {
-      type: Number,
-      default: 0
-    },
-    providentFund: {
-      type: Number,
-      default: 0
-    },
-    otherDeductions: {
-      type: Number,
-      default: 0
-    },
-    totalDeductions: {
-      type: Number,
-      default: 0
-    }
-  },
-  
-  // ===== SUMMARY =====
-  summary: {
-    grossEarnings: {
-      type: Number,
-      default: 0
-    },
-    totalDeductions: {
-      type: Number,
-      default: 0
-    },
-    netPayable: {
-      type: Number,
-      required: true,
-      min: 0
-    },
-    inWords: String // যেমন: "Fifty Thousand Taka Only"
-  },
-  
-  // ===== STATUS & APPROVAL =====
-  status: {
-    type: String,
-    enum: ['Draft', 'Pending', 'Approved', 'Paid', 'Rejected', 'Processing'],
-    default: 'Draft'
-  },
-  
-  approval: {
-    employeeApproved: {
-      type: Boolean,
-      default: false
-    },
-    employeeApprovedAt: Date,
-    hrApproved: {
-      type: Boolean,
-      default: false
-    },
-    hrApprovedAt: Date,
-    financeApproved: {
-      type: Boolean,
-      default: false
-    },
-    financeApprovedAt: Date
-  },
-  
-  payment: {
-    paymentDate: Date,
-    paymentMethod: {
-      type: String,
-      enum: ['Bank Transfer', 'Cash', 'Cheque', 'Mobile Banking']
-    },
-    transactionId: String,
-    bankAccount: String,
-    paidAmount: Number,
-    paymentRemarks: String
-  },
-  
-  // ===== RULES & CALCULATION =====
-  calculation: {
-    salaryRule: {
+    
+    // Payroll reference
+    payrollId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'SalaryRule'
+      ref: 'Payroll'
     },
-    ruleApplied: String,
-    calculationMethod: String,
-    dailyRate: Number,
-    hourlyRate: Number,
-    overtimeRate: Number,
-    calculationDate: {
-      type: Date,
-      default: Date.now
+    
+    // Calculation timestamp
+    calculatedAt: {
+      type: Date
     },
     calculatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
-    },
-    lastRecalculated: Date
-  },
-  
-  // ===== METADATA =====
-  metadata: {
-    autoGenerated: {
-      type: Boolean,
-      default: false
-    },
-    generatedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    generatedDate: Date,
-    isLocked: {
-      type: Boolean,
-      default: false
-    }, // After payment, lock the record
-    version: {
-      type: Number,
-      default: 1
     }
   },
   
-  // ===== DOCUMENTATION =====
-  notes: String,
-  remarks: String,
-  rejectionReason: String,
+  ipAddress: { 
+    type: String 
+  },
+  device: { 
+    type: Object 
+  },
+  location: {
+    type: String
+  },
   
-  createdBy: {
+  // Auto-marking
+  autoMarked: { 
+    type: Boolean, 
+    default: false 
+  },
+  autoClockOut: {
+    type: Boolean,
+    default: false
+  },
+  
+  // Admin corrections
+  correctedByAdmin: { 
+    type: Boolean, 
+    default: false 
+  },
+  correctedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
+  correctionDate: {
+    type: Date
+  },
   
-  updatedBy: {
+  leaveId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  },
-  
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  
-  updatedAt: {
-    type: Date,
-    default: Date.now
+    ref: 'Leave'
   }
-}, {
-  timestamps: true
+}, { 
+  timestamps: true 
 });
 
-// Virtuals
-payrollSchema.virtual('payPeriod').get(function() {
-  return `${this.periodStart.toLocaleDateString()} - ${this.periodEnd.toLocaleDateString()}`;
-});
+// Compound index for faster queries
+attendanceSchema.index({ employee: 1, date: 1 }, { unique: true });
+// Index for payroll calculations
+attendanceSchema.index({ 'payrollMetrics.payrollId': 1 });
+attendanceSchema.index({ date: 1, status: 1 });
 
-// Methods for calculations (OPTIONAL - can be in service layer)
-payrollSchema.methods.calculateDailyRate = function() {
-  return this.salaryStructure.basicSalary / 30; // Adjust based on your business logic
-};
-
-payrollSchema.methods.calculateAttendancePercentage = function() {
-  const totalDays = this.attendanceData.totalWorkingDays || 1;
-  const presentDays = this.attendanceData.presentDays || 0;
-  return (presentDays / totalDays) * 100;
-};
-
-// Static method to find payrolls by employee and period
-payrollSchema.statics.findByEmployeeAndPeriod = function(employeeId, startDate, endDate) {
-  return this.find({
-    employee: employeeId,
-    periodStart: { $gte: startDate },
-    periodEnd: { $lte: endDate }
-  });
-};
-
-// Pre-save middleware for automatic calculations
-payrollSchema.pre('save', function(next) {
-  // Update timestamps
-  this.updatedAt = Date.now();
+// Method to calculate payroll metrics for this attendance
+attendanceSchema.methods.calculatePayrollMetrics = async function(employee) {
+  const dailyRate = (employee.salaryStructure?.basicSalary || 0) / 26;
+  const hourlyRate = dailyRate / 8;
   
-  // Auto-calculate if in draft status
-  if (this.status === 'Draft') {
-    // Calculate totals
-    this.earnings.totalEarnings = 
-      (this.earnings.basicPay || 0) +
-      (this.earnings.houseRent || 0) +
-      (this.earnings.medicalAllowance || 0) +
-      (this.earnings.conveyance || 0) +
-      (this.earnings.overtimeAmount || 0) +
-      (this.earnings.bonus || 0) +
-      (this.earnings.incentives || 0) +
-      (this.earnings.otherAdditions || 0);
-    
-    this.deductions.totalDeductions = 
-      (this.deductions.absentDeduction || 0) +
-      (this.deductions.lateDeduction || 0) +
-      (this.deductions.halfDayDeduction || 0) +
-      (this.deductions.unpaidLeaveDeduction || 0) +
-      (this.deductions.advanceDeduction || 0) +
-      (this.deductions.taxDeduction || 0) +
-      (this.deductions.providentFund || 0) +
-      (this.deductions.otherDeductions || 0);
-    
-    this.summary.grossEarnings = this.earnings.totalEarnings;
-    this.summary.totalDeductions = this.deductions.totalDeductions;
-    this.summary.netPayable = this.earnings.totalEarnings - this.deductions.totalDeductions;
-    
-    // Update attendance percentage
-    this.attendanceData.attendancePercentage = this.calculateAttendancePercentage();
+  let dailyEarnings = 0;
+  let overtimeHours = 0;
+  let overtimeAmount = 0;
+  let lateDeduction = 0;
+  let absentDeduction = 0;
+  let halfDayDeduction = 0;
+  
+  switch(this.status) {
+    case 'Present':
+    case 'Clocked In':
+      dailyEarnings = dailyRate;
+      
+      // Overtime calculation
+      if (this.totalHours > 8) {
+        overtimeHours = this.totalHours - 8;
+        overtimeAmount = overtimeHours * (hourlyRate * 1.5); // 1.5x for overtime
+      }
+      break;
+      
+    case 'Late':
+      dailyEarnings = dailyRate;
+      lateDeduction = dailyRate * 0.1; // 10% deduction for being late
+      
+      // Overtime calculation
+      if (this.totalHours > 8) {
+        overtimeHours = this.totalHours - 8;
+        overtimeAmount = overtimeHours * (hourlyRate * 1.5);
+      }
+      break;
+      
+    case 'Half Day':
+      dailyEarnings = dailyRate * 0.5;
+      halfDayDeduction = dailyRate * 0.5;
+      break;
+      
+    case 'Absent':
+      absentDeduction = dailyRate;
+      break;
+      
+    case 'Leave':
+      // Paid leave - no deduction
+      dailyEarnings = dailyRate;
+      break;
+      
+    default:
+      // Holiday, Weekly Off - no earnings/deductions
+      break;
   }
   
-  next();
-});
+  // Calculate late minutes if clocked in after 10:00 AM
+  if (this.clockIn) {
+    const clockInHour = this.clockIn.getHours();
+    const clockInMinute = this.clockIn.getMinutes();
+    const totalMinutes = (clockInHour * 60) + clockInMinute;
+    const lateThreshold = 10 * 60; // 10:00 AM
+    
+    if (totalMinutes > lateThreshold) {
+      this.payrollMetrics.lateMinutes = totalMinutes - lateThreshold;
+    }
+  }
+  
+  // Update payroll metrics
+  this.payrollMetrics = {
+    dailyEarnings,
+    overtimeHours,
+    overtimeAmount,
+    lateMinutes: this.payrollMetrics.lateMinutes || 0,
+    lateDeduction,
+    absentDeduction,
+    halfDayDeduction,
+    netDailyAmount: dailyEarnings + overtimeAmount - lateDeduction - absentDeduction - halfDayDeduction,
+    calculatedAt: new Date()
+  };
+  
+  return this.payrollMetrics;
+};
 
-// Indexes
-payrollSchema.index({ employee: 1, periodStart: -1 });
-payrollSchema.index({ status: 1 });
-payrollSchema.index({ 'metadata.autoGenerated': 1 });
-payrollSchema.index({ periodStart: 1, periodEnd: 1 });
-payrollSchema.index({ 'payment.paymentDate': 1 });
-payrollSchema.index({ 'approval.employeeApproved': 1 });
-
-const Payroll = mongoose.model('Payroll', payrollSchema);
-
-module.exports = Payroll;
+module.exports = mongoose.model('Attendance', attendanceSchema);
