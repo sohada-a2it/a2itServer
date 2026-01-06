@@ -1200,3 +1200,127 @@ const formatDuration = (minutes) => {
   }
   return `${mins}m`;
 };
+// controllers/sessionController.js
+// নিচের ফাংশনটি যোগ করুন getMySessionStats নামে:
+
+exports.getMySessionStats = async (req, res) => {
+  try {
+    const userId = validateUserId(req.user);
+    const now = new Date();
+    
+    // Last 7 days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    // Last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    // Calculate for 7 days
+    const sevenDaysStats = await SessionLog.aggregate([
+      {
+        $match: {
+          userId: userId,
+          loginAt: { $gte: sevenDaysAgo }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalSessions: { $sum: 1 },
+          totalDuration: { $sum: '$durationMinutes' },
+          totalHoursWorked: { $sum: { $ifNull: ['$totalHours', 0] } },
+          daysClockedIn: { 
+            $sum: { 
+              $cond: [{ $ne: ['$clockIn', null] }, 1, 0] 
+            } 
+          },
+          daysClockedOut: { 
+            $sum: { 
+              $cond: [{ $ne: ['$clockOut', null] }, 1, 0] 
+            } 
+          }
+        }
+      }
+    ]);
+    
+    // Calculate for 30 days
+    const thirtyDaysStats = await SessionLog.aggregate([
+      {
+        $match: {
+          userId: userId,
+          loginAt: { $gte: thirtyDaysAgo }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalSessions: { $sum: 1 },
+          totalDuration: { $sum: '$durationMinutes' },
+          totalHoursWorked: { $sum: { $ifNull: ['$totalHours', 0] } },
+          daysClockedIn: { 
+            $sum: { 
+              $cond: [{ $ne: ['$clockIn', null] }, 1, 0] 
+            } 
+          },
+          daysClockedOut: { 
+            $sum: { 
+              $cond: [{ $ne: ['$clockOut', null] }, 1, 0] 
+            } 
+          }
+        }
+      }
+    ]);
+    
+    const sevenDaysResult = sevenDaysStats[0] || {
+      totalSessions: 0,
+      totalDuration: 0,
+      totalHoursWorked: 0,
+      daysClockedIn: 0,
+      daysClockedOut: 0
+    };
+    
+    const thirtyDaysResult = thirtyDaysStats[0] || {
+      totalSessions: 0,
+      totalDuration: 0,
+      totalHoursWorked: 0,
+      daysClockedIn: 0,
+      daysClockedOut: 0
+    };
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        'Last 7 days': {
+          totalSessions: sevenDaysResult.totalSessions,
+          totalDurationHours: (sevenDaysResult.totalDuration / 60).toFixed(2),
+          totalHoursWorked: sevenDaysResult.totalHoursWorked.toFixed(2),
+          daysClockedIn: sevenDaysResult.daysClockedIn,
+          daysClockedOut: sevenDaysResult.daysClockedOut,
+          avgHoursPerDay: sevenDaysResult.daysClockedIn > 0 ? 
+            (sevenDaysResult.totalHoursWorked / sevenDaysResult.daysClockedIn).toFixed(2) : '0.00',
+          attendanceRate: sevenDaysResult.totalSessions > 0 ?
+            ((sevenDaysResult.daysClockedIn / sevenDaysResult.totalSessions) * 100).toFixed(2) + '%' : '0%'
+        },
+        'Last 30 days': {
+          totalSessions: thirtyDaysResult.totalSessions,
+          totalDurationHours: (thirtyDaysResult.totalDuration / 60).toFixed(2),
+          totalHoursWorked: thirtyDaysResult.totalHoursWorked.toFixed(2),
+          daysClockedIn: thirtyDaysResult.daysClockedIn,
+          daysClockedOut: thirtyDaysResult.daysClockedOut,
+          avgHoursPerDay: thirtyDaysResult.daysClockedIn > 0 ? 
+            (thirtyDaysResult.totalHoursWorked / thirtyDaysResult.daysClockedIn).toFixed(2) : '0.00',
+          attendanceRate: thirtyDaysResult.totalSessions > 0 ?
+            ((thirtyDaysResult.daysClockedIn / thirtyDaysResult.totalSessions) * 100).toFixed(2) + '%' : '0%'
+        }
+      }
+    });
+  } catch (error) {
+    console.error('❌ getMySessionStats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch session statistics',
+      error: error.message
+    });
+  }
+};

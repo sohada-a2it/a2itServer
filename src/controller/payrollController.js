@@ -53,7 +53,7 @@ const getWorkingDaysForPeriod = async (periodStart, periodEnd) => {
   }
 };
 
-// Fetch all attendance data with overtime, late minutes, etc.
+// Fetch all attendance data with overtime, late minutes, etc. (Using new Attendance Model)
 const fetchAttendanceDetails = async (employeeId, periodStart, periodEnd) => {
   try {
     const attendanceRecords = await Attendance.find({
@@ -64,48 +64,59 @@ const fetchAttendanceDetails = async (employeeId, periodStart, periodEnd) => {
       }
     }).sort({ date: 1 });
 
-    // Initialize counters
+    // Initialize counters using new model structure
     let presentDays = 0;
     let absentDays = 0;
     let lateDays = 0;
     let halfDays = 0;
+    let leaveDays = 0;
     let totalOvertimeHours = 0;
     let totalLateMinutes = 0;
+    let totalOvertimeAmount = 0;
+    let totalLateDeduction = 0;
+    let totalAbsentDeduction = 0;
+    let totalHalfDayDeduction = 0;
+    let totalDailyEarnings = 0;
 
     attendanceRecords.forEach(record => {
-      const status = record.status?.toLowerCase();
+      const status = record.status;
       
       switch(status) {
-        case 'present':
-        case 'clocked in':
+        case 'Present':
+        case 'Clocked In':
+        case 'Auto Clocked In':
           presentDays++;
           break;
-        case 'absent':
+        case 'Absent':
           absentDays++;
           break;
-        case 'late':
+        case 'Late':
           lateDays++;
           presentDays++; // Late is still present
-          if (record.lateMinutes) {
-            totalLateMinutes += record.lateMinutes;
-          }
           break;
-        case 'half day':
-        case 'halfday':
+        case 'Half Day':
           halfDays++;
           presentDays += 0.5;
           break;
+        case 'Leave':
+          leaveDays++;
+          presentDays++; // Leave is counted as present
+          break;
       }
 
-      // Calculate overtime
-      if (record.totalHours > 8) {
-        totalOvertimeHours += (record.totalHours - 8);
-      } else if (record.overtimeHours) {
-        totalOvertimeHours += record.overtimeHours;
+      // Get payroll metrics from new model
+      if (record.payrollMetrics) {
+        totalDailyEarnings += record.payrollMetrics.dailyEarnings || 0;
+        totalOvertimeHours += record.payrollMetrics.overtimeHours || 0;
+        totalOvertimeAmount += record.payrollMetrics.overtimeAmount || 0;
+        totalLateMinutes += record.payrollMetrics.lateMinutes || 0;
+        totalLateDeduction += record.payrollMetrics.lateDeduction || 0;
+        totalAbsentDeduction += record.payrollMetrics.absentDeduction || 0;
+        totalHalfDayDeduction += record.payrollMetrics.halfDayDeduction || 0;
       }
     });
 
-    // Fetch leave details
+    // Fetch leave details (optional - as we already have from attendance)
     const approvedLeaves = await Leave.find({
       employee: employeeId,
       status: 'Approved',
@@ -152,7 +163,12 @@ const fetchAttendanceDetails = async (employeeId, periodStart, periodEnd) => {
       leaveDays: totalLeaveDays,
       leaveTypes,
       overtimeHours: totalOvertimeHours,
-      lateMinutes: totalLateMinutes
+      overtimeAmount: totalOvertimeAmount,
+      lateMinutes: totalLateMinutes,
+      lateDeduction: totalLateDeduction,
+      absentDeduction: totalAbsentDeduction,
+      halfDayDeduction: totalHalfDayDeduction,
+      dailyEarnings: totalDailyEarnings
     };
   } catch (error) {
     console.error('Error fetching attendance details:', error);
@@ -166,198 +182,68 @@ const numberToWords = (num) => {
   return new Intl.NumberFormat('en-BD').format(num) + ' Taka Only';
 };
 
-// ==================== EXISTING FUNCTIONS (Modified) ====================
+// ==================== MAIN CALCULATION FUNCTION ====================
 
 // -------------------- Calculate Salary Automatically --------------------
 const calculateSalary = async (employeeId, periodStart, periodEnd) => {
   try {
     // Fetch employee with salary rule
     const employee = await User.findById(employeeId)
-      .populate('salaryRule');
+      .select('firstName lastName employeeId salary salaryStructure department designation');
     
     if (!employee) {
       throw new Error('Employee not found');
     }
 
-    // Get salary rule
-    let salaryRule;
-    if (employee.salaryRule) {
-      salaryRule = employee.salaryRule;
-    } else {
-      salaryRule = await SalaryRule.findOne({ isActive: true }).sort({ createdAt: -1 });
+    // Get employee's actual salary from database
+    let employeeSalary = 0;
+    
+    // Priority 1: Check salary structure
+    if (employee.salaryStructure?.basicSalary > 0) {
+      employeeSalary = employee.salaryStructure.basicSalary;
+    }
+    // Priority 2: Check salary field
+    else if (employee.salary > 0) {
+      employeeSalary = employee.salary;
+    }
+    // Priority 3: Use default
+    else {
+      employeeSalary = 30000; // Default fallback
     }
 
-    if (!salaryRule) {
-      salaryRule = {
-        _id: null,
-        title: 'Default Salary Rule',
-        rate: employee.salary || 30000,
-        workingDaysPerMonth: 26,
-        perDaySalaryCalculation: true,
-        overtimeEnabled: false,
-        overtimeRate: 0,
-        leaveRule: { enabled: false, paidLeaves: 0, perDayDeduction: 0 },
-        lateRule: { enabled: false, lateDaysThreshold: 3, equivalentLeaveDays: 0.5 },
-        bonusAmount: 0,
-        bonusConditions: '',
-        components: [],
-        isActive: true
-      };
-    }
+    console.log(`Employee Salary Calculation for ${employee.employeeId}:`);
+    console.log(`- Employee ID: ${employee.employeeId}`);
+    console.log(`- Name: ${employee.firstName} ${employee.lastName}`);
+    console.log(`- Salary from DB: ${employeeSalary}`);
+    console.log(`- Salary Structure:`, employee.salaryStructure);
 
-    // Get working days from office schedule
-    const periodInfo = await getWorkingDaysForPeriod(periodStart, periodEnd);
-    const workingDaysPerMonth = periodInfo.workingDays;
+    // Get working days for period
+    const workingDaysInfo = await getWorkingDaysForPeriod(periodStart, periodEnd);
+    const workingDaysPerMonth = workingDaysInfo.workingDays;
 
-    // Get attendance data
+    // Get attendance details using new model
     const attendanceData = await fetchAttendanceDetails(employeeId, periodStart, periodEnd);
 
-    // Calculate employee's monthly salary
-    let monthlyBasic = 0;
-    
-    if (employee.salary > 0) {
-      monthlyBasic = employee.salary;
-    } else if (employee.rate > 0) {
-      switch(employee.salaryType) {
-        case 'hourly':
-          monthlyBasic = employee.rate * 8 * workingDaysPerMonth;
-          break;
-        case 'daily':
-          monthlyBasic = employee.rate * workingDaysPerMonth;
-          break;
-        case 'weekly':
-          monthlyBasic = employee.rate * 4;
-          break;
-        case 'monthly':
-          monthlyBasic = employee.rate;
-          break;
-        case 'project':
-          monthlyBasic = employee.rate;
-          break;
-        default:
-          monthlyBasic = employee.rate || 0;
-      }
-    } else {
-      monthlyBasic = salaryRule.rate || 0;
-    }
-
-    // Calculate basic pay based on attendance
-    let calculatedBasic = monthlyBasic;
-    const perDaySalaryCalculation = salaryRule.perDaySalaryCalculation !== false;
-    
-    if (perDaySalaryCalculation && workingDaysPerMonth > 0) {
-      const effectivePresentDays = attendanceData.presentDays + (attendanceData.halfDays * 0.5);
-      calculatedBasic = (monthlyBasic / workingDaysPerMonth) * effectivePresentDays;
-    }
+    // Calculate basic pay based on attendance (per day calculation)
+    const dailyRate = employeeSalary / workingDaysPerMonth;
+    const effectivePresentDays = attendanceData.presentDays + (attendanceData.halfDays * 0.5);
+    const calculatedBasic = dailyRate * effectivePresentDays;
 
     // Calculate attendance percentage
     const attendancePercentage = workingDaysPerMonth > 0 
       ? (attendanceData.presentDays / workingDaysPerMonth) * 100 
       : 0;
 
-    // Calculate all components based on salary rule structure
-    const components = {};
-    let totalAddition = 0;
-    let totalDeduction = 0;
-
-    // Handle different salary rule structures
-    if (salaryRule.components && Array.isArray(salaryRule.components)) {
-      salaryRule.components.forEach(component => {
-        let amount = 0;
-        
-        if (component.type === 'percentage') {
-          amount = (calculatedBasic * component.value) / 100;
-        } else if (component.type === 'fixed') {
-          amount = component.value;
-        } else if (component.type === 'attendance_based') {
-          if (component.condition === 'attendance_above_95' && attendancePercentage >= 95) {
-            amount = component.value;
-          }
-        }
-        
-        components[component.name] = amount;
-        
-        if (component.category === 'addition') {
-          totalAddition += amount;
-        } else if (component.category === 'deduction') {
-          totalDeduction += amount;
-        }
-      });
-    }
-
-    // Calculate overtime if enabled
-    let overtimeAmount = 0;
-    if (salaryRule.overtimeEnabled && salaryRule.overtimeRate) {
-      overtimeAmount = attendanceData.overtimeHours * salaryRule.overtimeRate;
-      totalAddition += overtimeAmount;
-      components['Overtime'] = overtimeAmount;
-    }
-
-    // Calculate leave deductions if enabled
-    let leaveDeduction = 0;
-    if (salaryRule.leaveRule && salaryRule.leaveRule.enabled) {
-      const paidLeaves = salaryRule.leaveRule.paidLeaves || 0;
-      const perDayDeduction = salaryRule.leaveRule.perDayDeduction || 0;
-      
-      if (attendanceData.leaveDays > paidLeaves) {
-        const extraLeaves = attendanceData.leaveDays - paidLeaves;
-        leaveDeduction = extraLeaves * perDayDeduction;
-        totalDeduction += leaveDeduction;
-        components['Leave Deduction'] = leaveDeduction;
-      }
-    }
-
-    // Calculate late deductions if enabled
-    let lateDeduction = 0;
-    if (salaryRule.lateRule && salaryRule.lateRule.enabled) {
-      const lateThreshold = salaryRule.lateRule.lateDaysThreshold || 3;
-      const equivalentLeaveDays = salaryRule.lateRule.equivalentLeaveDays || 0.5;
-      const perDaySalary = monthlyBasic / workingDaysPerMonth;
-      
-      if (attendanceData.lateDays > lateThreshold) {
-        const extraLateDays = attendanceData.lateDays - lateThreshold;
-        const equivalentLeaveCount = extraLateDays * equivalentLeaveDays;
-        lateDeduction = equivalentLeaveCount * perDaySalary;
-        totalDeduction += lateDeduction;
-        components['Late Deduction'] = lateDeduction;
-      }
-    }
-
-    // Add bonus if conditions met
-    let bonusAmount = 0;
-    if (salaryRule.bonusAmount && salaryRule.bonusConditions) {
-      const conditions = salaryRule.bonusConditions.toLowerCase();
-      let bonusEligible = true;
-      
-      if (conditions.includes('attendance_above_90') && attendancePercentage < 90) {
-        bonusEligible = false;
-      }
-      if (conditions.includes('no_late') && attendanceData.lateDays > 0) {
-        bonusEligible = false;
-      }
-      
-      if (bonusEligible) {
-        bonusAmount = salaryRule.bonusAmount;
-        totalAddition += bonusAmount;
-        components['Performance Bonus'] = bonusAmount;
-      }
-    }
-
-    // Calculate tax deduction (10% if salary > 40000)
-    let taxDeduction = 0;
-    const grossSalary = calculatedBasic + totalAddition;
-    if (grossSalary > 40000) {
-      taxDeduction = grossSalary * 0.10;
-      totalDeduction += taxDeduction;
-      components['Tax Deduction'] = taxDeduction;
-    }
-
+    // Calculate totals from attendance metrics
+    const totalAddition = attendanceData.overtimeAmount + attendanceData.dailyEarnings;
+    const totalDeduction = attendanceData.lateDeduction + attendanceData.absentDeduction + attendanceData.halfDayDeduction;
+    
     // Calculate net payable
-    const netPayable = grossSalary - totalDeduction;
+    const netPayable = calculatedBasic + totalAddition - totalDeduction;
 
     return {
       basicPay: parseFloat(calculatedBasic.toFixed(2)),
-      monthlyBasic: parseFloat(monthlyBasic.toFixed(2)),
+      monthlyBasic: parseFloat(employeeSalary.toFixed(2)),
       presentDays: attendanceData.presentDays,
       absentDays: attendanceData.absentDays,
       lateDays: attendanceData.lateDays,
@@ -368,24 +254,22 @@ const calculateSalary = async (employeeId, periodStart, periodEnd) => {
       totalAddition: parseFloat(totalAddition.toFixed(2)),
       totalDeduction: parseFloat(totalDeduction.toFixed(2)),
       netPayable: parseFloat(netPayable.toFixed(2)),
-      components,
       overtime: {
-        enabled: salaryRule.overtimeEnabled,
-        amount: parseFloat(overtimeAmount.toFixed(2)),
-        rate: salaryRule.overtimeRate,
-        hours: attendanceData.overtimeHours
+        hours: attendanceData.overtimeHours,
+        amount: parseFloat(attendanceData.overtimeAmount.toFixed(2)),
+        rate: (dailyRate / 8) * 1.5 // Overtime rate (1.5x hourly rate)
       },
-      leaveDeduction: parseFloat(leaveDeduction.toFixed(2)),
-      lateDeduction: parseFloat(lateDeduction.toFixed(2)),
-      bonusAmount: parseFloat(bonusAmount.toFixed(2)),
+      leaveDeduction: parseFloat(attendanceData.absentDeduction.toFixed(2)),
+      lateDeduction: parseFloat(attendanceData.lateDeduction.toFixed(2)),
+      bonusAmount: 0, // Can be added based on rules
       rulesApplied: {
-        salaryRuleId: salaryRule._id,
-        ruleName: salaryRule.title || 'Default Rule',
-        calculationMethod: perDaySalaryCalculation ? 'Per Day' : 'Monthly Fixed'
+        salaryRuleId: null,
+        ruleName: 'Attendance Based Calculation',
+        calculationMethod: 'Per Day Attendance Based'
       },
       employeeDetails: {
         employeeId: employee.employeeId,
-        name: employee.fullName || `${employee.firstName} ${employee.lastName}`,
+        name: `${employee.firstName} ${employee.lastName}`,
         department: employee.department,
         designation: employee.designation
       },
@@ -394,13 +278,17 @@ const calculateSalary = async (employeeId, periodStart, periodEnd) => {
         end: periodEnd,
         daysInPeriod: Math.ceil((new Date(periodEnd) - new Date(periodStart)) / (1000 * 60 * 60 * 24)) + 1
       },
-      calculatedDate: new Date()
+      calculatedDate: new Date(),
+      dailyRate: parseFloat(dailyRate.toFixed(2)),
+      hourlyRate: parseFloat((dailyRate / 8).toFixed(2))
     };
   } catch (error) {
     console.error('Salary calculation error:', error);
     throw error;
   }
 };
+
+// ==================== PAYROLL CONTROLLER FUNCTIONS ====================
 
 // -------------------- Create Payroll with Auto Calculation --------------------  
 exports.createPayroll = async (req, res) => {
@@ -462,7 +350,7 @@ exports.createPayroll = async (req, res) => {
         leaveDays: salaryCalculation.leaveDays,
         overtimeHours: salaryCalculation.overtime.hours,
         attendancePercentage: salaryCalculation.attendancePercentage,
-        leaveTypes: [] // Populate if needed
+        leaveTypes: salaryCalculation.leaveTypes || []
       },
       
       // Salary Structure
@@ -484,27 +372,27 @@ exports.createPayroll = async (req, res) => {
         overtimeAmount: salaryCalculation.overtime.amount,
         bonus: salaryCalculation.bonusAmount,
         incentives: 0,
-        otherAdditions: salaryCalculation.totalAddition - salaryCalculation.overtime.amount - salaryCalculation.bonusAmount,
-        totalEarnings: salaryCalculation.basicPay + salaryCalculation.totalAddition
+        otherAdditions: 0,
+        totalEarnings: salaryCalculation.basicPay + salaryCalculation.overtime.amount + salaryCalculation.bonusAmount
       },
       
       // Deductions
       deductions: {
-        absentDeduction: 0,
+        absentDeduction: salaryCalculation.leaveDeduction,
         lateDeduction: salaryCalculation.lateDeduction,
         halfDayDeduction: 0,
-        unpaidLeaveDeduction: salaryCalculation.leaveDeduction,
+        unpaidLeaveDeduction: 0,
         advanceDeduction: 0,
         taxDeduction: 0,
         providentFund: 0,
-        otherDeductions: salaryCalculation.totalDeduction - salaryCalculation.lateDeduction - salaryCalculation.leaveDeduction,
-        totalDeductions: salaryCalculation.totalDeduction
+        otherDeductions: 0,
+        totalDeductions: salaryCalculation.lateDeduction + salaryCalculation.leaveDeduction
       },
       
       // Summary
       summary: {
-        grossEarnings: salaryCalculation.basicPay + salaryCalculation.totalAddition,
-        totalDeductions: salaryCalculation.totalDeduction,
+        grossEarnings: salaryCalculation.basicPay + salaryCalculation.overtime.amount + salaryCalculation.bonusAmount,
+        totalDeductions: salaryCalculation.lateDeduction + salaryCalculation.leaveDeduction,
         netPayable: salaryCalculation.netPayable,
         inWords: numberToWords(salaryCalculation.netPayable)
       },
@@ -516,8 +404,8 @@ exports.createPayroll = async (req, res) => {
         salaryRule: salaryCalculation.rulesApplied.salaryRuleId,
         ruleApplied: salaryCalculation.rulesApplied.ruleName,
         calculationMethod: salaryCalculation.rulesApplied.calculationMethod,
-        dailyRate: salaryCalculation.monthlyBasic / salaryCalculation.totalWorkingDays,
-        hourlyRate: (salaryCalculation.monthlyBasic / salaryCalculation.totalWorkingDays) / 8,
+        dailyRate: salaryCalculation.dailyRate,
+        hourlyRate: salaryCalculation.hourlyRate,
         overtimeRate: salaryCalculation.overtime.rate,
         calculationDate: salaryCalculation.calculatedDate,
         calculatedBy: req.user?._id
@@ -551,7 +439,7 @@ exports.createPayroll = async (req, res) => {
   }
 };
 
-// ==================== NEW AUTO CALCULATION FUNCTIONS ====================
+// ==================== AUTO CALCULATION FUNCTIONS ====================
 
 // -------------------- Auto Calculate Payroll from Attendance --------------------
 exports.calculatePayrollFromAttendance = async (req, res) => {
@@ -565,13 +453,37 @@ exports.calculatePayrollFromAttendance = async (req, res) => {
       });
     }
 
-    // Use existing calculateSalary function
+    // Use the calculateSalary function
     const salaryCalculation = await calculateSalary(employeeId, periodStart, periodEnd);
+
+    // Format response for frontend
+    const formattedResponse = {
+      employeeDetails: {
+        name: salaryCalculation.employeeDetails.name,
+        employeeId: salaryCalculation.employeeDetails.employeeId,
+        department: salaryCalculation.employeeDetails.department,
+        designation: salaryCalculation.employeeDetails.designation
+      },
+      periodStart: salaryCalculation.calculationPeriod.start,
+      periodEnd: salaryCalculation.calculationPeriod.end,
+      presentDays: salaryCalculation.presentDays,
+      attendancePercentage: salaryCalculation.attendancePercentage,
+      basicPay: salaryCalculation.basicPay,
+      monthlyBasic: salaryCalculation.monthlyBasic,
+      overtime: salaryCalculation.overtime,
+      totalAddition: salaryCalculation.totalAddition,
+      lateDeduction: salaryCalculation.lateDeduction,
+      leaveDeduction: salaryCalculation.leaveDeduction,
+      bonusAmount: salaryCalculation.bonusAmount,
+      totalDeduction: salaryCalculation.totalDeduction,
+      netPayable: salaryCalculation.netPayable,
+      rulesApplied: salaryCalculation.rulesApplied
+    };
 
     res.status(200).json({
       status: 'success',
       message: 'Payroll calculated from attendance successfully',
-      data: salaryCalculation
+      data: formattedResponse
     });
 
   } catch (error) {
@@ -612,10 +524,6 @@ exports.autoGeneratePayroll = async (req, res) => {
 
     // Calculate salary
     const salaryCalculation = await calculateSalary(employeeId, periodStart, periodEnd);
-
-    // Get employee info
-    const employee = await User.findById(employeeId)
-      .select('firstName lastName employeeId');
 
     // Create payroll
     const payroll = new Payroll({
@@ -687,8 +595,8 @@ exports.autoGeneratePayroll = async (req, res) => {
         salaryRule: salaryCalculation.rulesApplied.salaryRuleId,
         ruleApplied: salaryCalculation.rulesApplied.ruleName,
         calculationMethod: salaryCalculation.rulesApplied.calculationMethod,
-        dailyRate: salaryCalculation.monthlyBasic / salaryCalculation.totalWorkingDays,
-        hourlyRate: (salaryCalculation.monthlyBasic / salaryCalculation.totalWorkingDays) / 8,
+        dailyRate: salaryCalculation.dailyRate,
+        hourlyRate: salaryCalculation.hourlyRate,
         overtimeRate: salaryCalculation.overtime.rate,
         calculationDate: new Date(),
         calculatedBy: req.user._id
@@ -708,6 +616,24 @@ exports.autoGeneratePayroll = async (req, res) => {
     });
 
     await payroll.save();
+
+    // Update attendance records with payroll ID
+    await Attendance.updateMany(
+      {
+        employee: employeeId,
+        date: {
+          $gte: new Date(periodStart),
+          $lte: new Date(periodEnd)
+        }
+      },
+      {
+        $set: {
+          'payrollMetrics.payrollId': payroll._id,
+          'payrollMetrics.calculatedAt': new Date(),
+          'payrollMetrics.calculatedBy': req.user._id
+        }
+      }
+    );
 
     res.status(201).json({
       status: 'success',
@@ -805,7 +731,7 @@ exports.bulkAutoGeneratePayroll = async (req, res) => {
   }
 };
 
-// ==================== EXISTING FUNCTIONS (Keep as is) ====================
+// ==================== EXISTING FUNCTIONS ====================
 
 // -------------------- Get All Payrolls --------------------
 exports.getAllPayrolls = async (req, res) => {
@@ -813,7 +739,7 @@ exports.getAllPayrolls = async (req, res) => {
     const payrolls = await Payroll.find()
       .populate(
         'employee',
-        'firstName lastName email employeeId role salary'
+        'firstName lastName email employeeId salary salaryStructure department designation'
       )
       .sort({ periodStart: -1 });
 
@@ -834,12 +760,21 @@ exports.getAllPayrolls = async (req, res) => {
 exports.getPayrollById = async (req, res) => {
   try {
     const payroll = await Payroll.findById(req.params.id)
-      .populate('employee', 'firstName lastName email employeeId role salary department')
-      .populate('calculation.salaryRule');
+      .populate('employee', 'firstName lastName email employeeId salary salaryStructure department designation');
 
     if (!payroll) {
       return res.status(404).json({ status: "fail", message: "Payroll not found" });
     }
+
+    // Get related attendance records
+    const attendanceRecords = await Attendance.find({
+      employee: payroll.employee._id,
+      date: {
+        $gte: payroll.periodStart,
+        $lte: payroll.periodEnd
+      },
+      'payrollMetrics.payrollId': payroll._id
+    }).sort({ date: 1 });
 
     // Calculate attendance percentage if not present
     if (!payroll.attendanceData.attendancePercentage && payroll.attendanceData.totalWorkingDays > 0) {
@@ -849,7 +784,10 @@ exports.getPayrollById = async (req, res) => {
 
     res.status(200).json({ 
       status: "success", 
-      payroll 
+      data: {
+        payroll,
+        attendanceRecords
+      }
     });
   } catch (error) {
     res.status(500).json({ status: "fail", message: error.message });
@@ -894,6 +832,19 @@ exports.deletePayroll = async (req, res) => {
     if (!payroll) {
       return res.status(404).json({ status: "fail", message: "Payroll not found" });
     }
+
+    // Remove payroll reference from attendance records
+    await Attendance.updateMany(
+      { 'payrollMetrics.payrollId': req.params.id },
+      {
+        $unset: {
+          'payrollMetrics.payrollId': '',
+          'payrollMetrics.calculatedAt': '',
+          'payrollMetrics.calculatedBy': ''
+        }
+      }
+    );
+
     res.status(200).json({ status: "success", message: "Payroll deleted successfully" });
   } catch (error) {
     res.status(500).json({ status: "fail", message: error.message });
@@ -1077,6 +1028,52 @@ exports.employeeActionOnPayroll = async (req, res) => {
       status: "success",
       message: `Payroll ${action}ed successfully`,
       payroll
+    });
+  } catch (error) {
+    res.status(500).json({ status: "fail", message: error.message });
+  }
+};
+
+// -------------------- Get Payroll by Employee and Period --------------------
+exports.getPayrollByEmployeeAndPeriod = async (req, res) => {
+  try {
+    const { employeeId, periodStart, periodEnd } = req.query;
+    
+    if (!employeeId || !periodStart || !periodEnd) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Employee ID, periodStart and periodEnd are required"
+      });
+    }
+
+    const payroll = await Payroll.findOne({
+      employee: employeeId,
+      periodStart: { $lte: new Date(periodEnd) },
+      periodEnd: { $gte: new Date(periodStart) }
+    }).populate('employee', 'firstName lastName employeeId department designation');
+
+    if (!payroll) {
+      return res.status(404).json({
+        status: "fail",
+        message: "No payroll found for this period"
+      });
+    }
+
+    // Get attendance records for this payroll
+    const attendanceRecords = await Attendance.find({
+      employee: employeeId,
+      date: {
+        $gte: new Date(periodStart),
+        $lte: new Date(periodEnd)
+      }
+    }).sort({ date: 1 });
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        payroll,
+        attendanceRecords
+      }
     });
   } catch (error) {
     res.status(500).json({ status: "fail", message: error.message });

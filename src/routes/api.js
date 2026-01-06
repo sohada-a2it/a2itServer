@@ -147,13 +147,14 @@ router.get('/user/my-logs', protect, auditController.getMyAuditLogs);
 
 // ==================== SessionLog Routes==================== 
 // ==================== USER ROUTES ====================
-router.get('/my-sessions', sessionController.getMySessions);
-router.get('/my-current-session', sessionController.getMyCurrentSession);
-router.get('/my-session-state', sessionController.getMyCurrentSession); // Same as above
-router.get('/stats/attendance', sessionController.getSessionAttendanceStats);
-router.get('/stats', sessionController.getSessionStatistics);
-router.post('/sessions/clock-in', sessionController.clockIn);
-router.post('/sessions/clock-out', sessionController.clockOut);
+router.get('/my-sessions', protect, sessionController.getMySessions);
+router.get('/my-current-session', protect, sessionController.getMyCurrentSession);
+router.get('/my-session-state', protect, sessionController.getMyCurrentSession); // Same as above
+router.get('/stats/attendance', protect, sessionController.getSessionAttendanceStats);
+router.get('/stats', protect, sessionController.getSessionStatistics);
+router.post('/sessions/clock-in', protect, sessionController.clockIn);
+router.post('/sessions/clock-out', protect, sessionController.clockOut);
+router.get('/my-session-stats', protect, sessionController.getMySessionStats); 
 
 // ==================== ADMIN ROUTES ====================
 router.get('/admin/all-sessions', adminOnly, sessionController.getAllSessions);
@@ -183,8 +184,7 @@ router.get('/override/history', protect, adminOnly, OfficeSchedule.getOverrideHi
 router.delete('/overrideDelete/:id', protect, adminOnly, OfficeSchedule.deleteOverride);
 
 
-// Reports routes
-// backend routes (Node.js/Express)
+// Reports routes 
 router.get('/reports/employees', protect, adminOnly, reportController.getEmployeesForReport);
 router.get('/reports/departments', protect, adminOnly, reportController.getDepartmentsForReport);
 router.post('/reports/attendance', protect, adminOnly, reportController.exportAttendanceReport);

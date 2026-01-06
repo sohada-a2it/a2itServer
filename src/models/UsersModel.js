@@ -98,6 +98,44 @@ const userSchema = new mongoose.Schema(
       ref: 'SalaryRule',
       default: null
     },
+      // Salary Information
+  salary: {
+    type: Number,
+    default: 0
+  },
+  
+  salaryStructure: {
+    basicSalary: { type: Number, default: 0 },
+    houseRent: { type: Number, default: 0 },
+    medicalAllowance: { type: Number, default: 0 },
+    conveyance: { type: Number, default: 0 },
+    otherAllowances: { type: Number, default: 0 },
+    grossSalary: { type: Number, default: 0 },
+    providentFund: { type: Number, default: 0 },
+    tax: { type: Number, default: 0 }
+  },
+  
+  // Payment Details
+  bankDetails: {
+    bankName: { type: String, default: '' },
+    accountNumber: { type: String, default: '' },
+    accountHolderName: { type: String, default: '' },
+    branchName: { type: String, default: '' },
+    routingNumber: { type: String, default: '' }
+  },
+  
+  // Contract Details
+  contractType: {
+    type: String,
+    enum: ['Permanent', 'Contractual', 'Probation', 'Part-time', 'Intern'],
+    default: 'Permanent'
+  },
+  
+  salaryType: {
+    type: String,
+    enum: ['Monthly', 'Weekly', 'Daily', 'Hourly', 'Project'],
+    default: 'Monthly'
+  },
 
     // ============ ADMIN-SPECIFIC FIELDS ============
     companyName: {
