@@ -178,7 +178,7 @@ router.get('/weekly-off', protect, OfficeSchedule.getWeeklyOff);
 router.put('/updateWeekly-off', protect, adminOnly, OfficeSchedule.updateWeeklyOff);
 router.put('/override', protect, adminOnly, OfficeSchedule.createOrUpdateOverride);
 router.get('/override/history', protect, adminOnly, OfficeSchedule.getOverrideHistory);
-router.delete('/override/:id', protect, adminOnly, OfficeSchedule.deleteOverride);
+router.delete('/overrideDelete/:id', protect, adminOnly, OfficeSchedule.deleteOverride);
 
 
 // Reports routes
