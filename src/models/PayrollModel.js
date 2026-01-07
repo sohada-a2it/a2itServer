@@ -131,13 +131,13 @@ const payrollSchema = new mongoose.Schema({
 });
 
 // Compound index for faster queries
-attendanceSchema.index({ employee: 1, date: 1 }, { unique: true });
+payrollSchema.index({ employee: 1, date: 1 }, { unique: true });
 // Index for payroll calculations
-attendanceSchema.index({ 'payrollMetrics.payrollId': 1 });
-attendanceSchema.index({ date: 1, status: 1 });
+payrollSchema.index({ 'payrollMetrics.payrollId': 1 });
+payrollSchema.index({ date: 1, status: 1 });
 
 // Method to calculate payroll metrics for this attendance
-attendanceSchema.methods.calculatePayrollMetrics = async function(employee) {
+payrollSchema.methods.calculatePayrollMetrics = async function(employee) {
   const dailyRate = (employee.salaryStructure?.basicSalary || 0) / 26;
   const hourlyRate = dailyRate / 8;
   
