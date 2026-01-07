@@ -1,7 +1,7 @@
 // AttendanceModel.js - new version
 const mongoose = require('mongoose');
 
-const attendanceSchema = new mongoose.Schema({
+const payrollSchema = new mongoose.Schema({
   employee: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User', 
@@ -218,4 +218,4 @@ attendanceSchema.methods.calculatePayrollMetrics = async function(employee) {
   return this.payrollMetrics;
 };
 
-module.exports = mongoose.model('Attendance', attendanceSchema);
+module.exports = mongoose.model('payroll', payrollSchema);
