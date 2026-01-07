@@ -8,14 +8,11 @@ const payrollSchema = new mongoose.Schema({
     required: true
   },
   employeeName: {
-    type: String,
-    required: true
+    type: String, 
   },
   employeeId: {
-    type: String,
-    required: true
-  },
-  
+    type: String, 
+  }, 
   // Pay Period
   periodStart: {
     type: Date,
@@ -39,12 +36,10 @@ const payrollSchema = new mongoose.Schema({
     default: ''
   },
   month: {
-    type: Number,
-    required: true
+    type: Number, 
   },
   year: {
-    type: Number,
-    required: true
+    type: Number, 
   },
   
   // Salary Details
