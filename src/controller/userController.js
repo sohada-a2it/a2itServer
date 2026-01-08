@@ -1698,3 +1698,268 @@ exports.logoutAllSessions = async (req, res) => {
     });
   }
 };
+
+
+// ================= ADMIN: GET USER BY ID =================
+
+// Admin get user profile by ID
+exports.getUserById = async (req, res) => {
+  try {
+    console.log('🔍 Admin fetching user by ID:', req.params.id);
+    
+    const { id } = req.params;
+    
+    // Check if admin is requesting
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Admin only."
+      });
+    }
+
+    // Find user by ID
+    const user = await User.findById(id)
+      .select('-password -__v')
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    console.log('✅ User found:', {
+      id: user._id,
+      email: user.email,
+      role: user.role,
+      name: `${user.firstName} ${user.lastName}`
+    });
+
+    // Format response with all user data
+    const userResponse = {
+      // Basic info
+      _id: user._id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      fullName: `${user.firstName} ${user.lastName}`,
+      email: user.email,
+      phone: user.phone,
+      address: user.address,
+      role: user.role,
+      
+      // Profile
+      picture: user.picture,
+      department: user.department,
+      designation: user.designation,
+      employeeId: user.employeeId,
+      
+      // Salary information
+      salaryType: user.salaryType,
+      rate: user.rate,
+      basicSalary: user.basicSalary,
+      salary: user.salary,
+      joiningDate: user.joiningDate,
+      salaryRule: user.salaryRule,
+      
+      // Account status
+      status: user.status,
+      isActive: user.isActive,
+      
+      // Meta
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      lastLogin: user.lastLogin,
+      loginCount: user.loginCount || 0,
+      
+      // Role-specific fields
+      ...(user.role === 'admin' && {
+        companyName: user.companyName,
+        adminPosition: user.adminPosition,
+        adminLevel: user.adminLevel,
+        permissions: user.permissions || [],
+        isSuperAdmin: user.isSuperAdmin || false,
+        canManageUsers: user.canManageUsers || false,
+        canManagePayroll: user.canManagePayroll || false
+      }),
+      
+      ...(user.role === 'employee' && {
+        managerId: user.managerId,
+        attendanceId: user.attendanceId,
+        shiftTiming: user.shiftTiming || { start: '09:00', end: '18:00' }
+      })
+    };
+
+    // ✅ AuditLog
+    await AuditLog.create({
+      userId: req.user._id,
+      action: "Viewed User Profile (Admin)",
+      target: user._id,
+      details: {
+        viewedUserId: user._id,
+        viewedUserEmail: user.email,
+        viewedUserRole: user.role
+      },
+      ip: req.ip,
+      device: req.headers['user-agent']
+    });
+
+    // ✅ Session activity
+    await addSessionActivity({
+      userId: req.user._id,
+      action: "Viewed User Profile",
+      target: user._id,
+      details: {
+        userId: user._id,
+        email: user.email,
+        role: user.role
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "User profile retrieved successfully",
+      user: userResponse
+    });
+
+  } catch (error) {
+    console.error('❌ Get user by ID error:', error);
+    
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format"
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to fetch user profile"
+    });
+  }
+};
+
+// ================= ADMIN: SEARCH USERS =================
+
+exports.searchUsers = async (req, res) => {
+  try {
+    const { query } = req.query;
+    
+    if (!query) {
+      return res.status(400).json({
+        success: false,
+        message: "Search query is required"
+      });
+    }
+
+    // Search in multiple fields
+    const users = await User.find({
+      $or: [
+        { firstName: { $regex: query, $options: 'i' } },
+        { lastName: { $regex: query, $options: 'i' } },
+        { email: { $regex: query, $options: 'i' } },
+        { phone: { $regex: query, $options: 'i' } },
+        { employeeId: { $regex: query, $options: 'i' } }
+      ]
+    })
+    .select('_id firstName lastName email role department designation employeeId phone picture status')
+    .limit(20)
+    .lean();
+
+    // Format response
+    const formattedUsers = users.map(user => ({
+      _id: user._id,
+      name: `${user.firstName} ${user.lastName}`,
+      email: user.email,
+      role: user.role,
+      department: user.department,
+      designation: user.designation,
+      employeeId: user.employeeId,
+      phone: user.phone,
+      picture: user.picture,
+      status: user.status
+    }));
+
+    // ✅ Session activity
+    await addSessionActivity({
+      userId: req.user._id,
+      action: "Searched Users",
+      target: null,
+      details: {
+        query: query,
+        results: users.length
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      users: formattedUsers
+    });
+
+  } catch (error) {
+    console.error('Search users error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ================= ADMIN: GET USER SUMMARY =================
+
+exports.getUserSummary = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get basic user info
+    const user = await User.findById(id)
+      .select('firstName lastName email role department designation employeeId status lastLogin createdAt')
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Get additional statistics if needed
+    const sessionCount = await SessionLog.countDocuments({ userId: id });
+    const activeSessions = await SessionLog.countDocuments({ 
+      userId: id, 
+      logoutAt: null 
+    });
+
+    const summary = {
+      basicInfo: {
+        name: `${user.firstName} ${user.lastName}`,
+        email: user.email,
+        role: user.role,
+        department: user.department,
+        designation: user.designation,
+        employeeId: user.employeeId,
+        status: user.status
+      },
+      activity: {
+        lastLogin: user.lastLogin,
+        accountCreated: user.createdAt,
+        totalSessions: sessionCount,
+        activeSessions: activeSessions
+      },
+      permissions: user.role === 'admin' ? user.permissions : []
+    };
+
+    res.status(200).json({
+      success: true,
+      summary: summary
+    });
+
+  } catch (error) {
+    console.error('Get user summary error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};

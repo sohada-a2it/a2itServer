@@ -29,8 +29,15 @@ router.put("/admin/update-user/:id", protect, adminOnly, userController.adminUpd
 router.delete("/admin/user-delete/:id", protect, adminOnly, userController.deleteUser);   
 router.get('/my-sessions', protect, userController.getAllSessions);
 router.delete('/terminate-session/:id', protect, userController.terminateSession);
-router.post('/logout-all', protect, userController.logoutAllSessions);
+router.post('/logout-all', protect, userController.logoutAllSessions); 
+// Admin get user by ID
+router.get('/admin/users/:id', protect, adminOnly, userController.getUserById);
 
+// Admin search users
+router.get('/admin/users/search', protect, adminOnly, userController.searchUsers);
+
+// Admin get user summary
+router.get('/admin/users/:id/summary', protect, adminOnly, userController.getUserSummary);
 // =================== OTP Routes ====================
 router.post('/admin/request-otp', authController.AdminRequestOtp);
 router.post('/admin/verify-otp', authController.AdminVerifyOtp);
