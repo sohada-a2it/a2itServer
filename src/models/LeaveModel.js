@@ -53,7 +53,26 @@ const leaveSchema = new mongoose.Schema({
   requestedAt: {
     type: Date,
     default: Date.now
-  }
+  },
+    // Shift timing per employee
+  shiftTiming: {
+    start: { type: String, default: '09:00' }, // Default 9 AM
+    end: { type: String, default: '18:00' }     // Default 6 PM
+  },
+  
+  // Late calculation settings
+  lateSettings: {
+    thresholdMinutes: { type: Number, default: 5 }, // 5 minutes
+    gracePeriod: { type: Number, default: 0 }, // 0 minutes grace
+    calculateFromShiftStart: { type: Boolean, default: true }
+  },
+  
+  // Auto clock out settings
+  autoClockOutSettings: {
+    enabled: { type: Boolean, default: true },
+    time: { type: String, default: '18:10' }, // 6:10 PM
+    overrideDefault: { type: Boolean, default: false }
+  },
 }, {
   timestamps: true
 });

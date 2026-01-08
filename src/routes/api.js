@@ -66,27 +66,32 @@ router.delete(
   profileController.removeProfilePicture
 );
 
-// ====================Attendace Routes ====================  
-// Employee routes
-router.get('/today',protect, attendanceController.getTodayStatus);
-router.get('/records',protect, attendanceController.getAttendanceRecords);
-router.get('/summary', attendanceController.getUserSummary);
-router.get('/attendance/:id',protect, attendanceController.getAttendanceById);
-router.post('/clock-in',protect, attendanceController.clockIn);
-router.post('/clock-out',protect, attendanceController.clockOut);
-router.get('/export',protect, attendanceController.exportAttendanceData);
-router.get('/range',protect, attendanceController.getAttendanceByDateRange);
+// ===================== EMPLOYEE ROUTES (Require authentication) ===================== 
+router.get('/today', protect, attendanceController.getTodayStatus); 
+router.post('/clock-in', protect, attendanceController.clockIn); 
+router.post('/clock-out', protect, attendanceController.clockOut); 
+router.get('/records', protect, attendanceController.getAttendanceRecords); 
+router.get('/records/:id', protect, attendanceController.getAttendanceById); 
+router.get('/summary', protect, attendanceController.getUserSummary); 
+router.get('/range', protect, attendanceController.getAttendanceByDateRange); 
+router.get('/shift-timing', protect, attendanceController.getEmployeeShiftTiming); 
+router.get('/employee-attendance', protect, attendanceController.getEmployeeAttendanceWithShift); 
+router.get('/late-statistics', protect, attendanceController.getLateStatistics); 
+router.get('/export', protect, attendanceController.exportAttendanceData);
 
-// Admin routes
-router.get('/admin/records', adminOnly, attendanceController.getAllAttendanceRecords);
-router.get('/admin/summary', adminOnly, attendanceController.getAllAttendanceSummary);
-router.put('/admin/correct', adminOnly, attendanceController.adminCorrectAttendance);
+// ===================== ADMIN ROUTES (Require admin privileges) ===================== 
+router.get('/admin/all-records', protect, adminOnly, attendanceController.getAllAttendanceRecords); 
+router.get('/admin/summary', protect, adminOnly, attendanceController.getAllAttendanceSummary); 
+router.put('/admin/correct/:id', protect, adminOnly, attendanceController.adminCorrectAttendance); 
+router.put('/admin/update-shift', protect, adminOnly, attendanceController.updateEmployeeShiftTiming); 
+router.post('/admin/create-attendance', protect, adminOnly, attendanceController.createManualAttendance); 
+router.post('/admin/bulk-attendance', protect, adminOnly, attendanceController.createBulkAttendance); 
+router.post('/admin/trigger-auto-clockout', protect, adminOnly, attendanceController.triggerAutoClockOut); 
+router.get('/admin/late-statistics', protect, adminOnly, attendanceController.getLateStatistics); 
+router.get('/admin/employee-attendance', protect, adminOnly, attendanceController.getEmployeeAttendanceWithShift); 
+router.get('/admin/employee-shift-timing', protect, adminOnly, attendanceController.getEmployeeShiftTiming); 
+router.get('/admin/export', protect, adminOnly, attendanceController.exportAttendanceData);
 
-// Admin routes
-router.get('/admin/attendance/all', protect, adminOnly, attendanceController.getAllAttendanceRecords);
-router.get('/admin/attendance/summary', protect, adminOnly, attendanceController.getAllAttendanceSummary);
-router.put('/admin/attendance/correct/:id', protect, adminOnly, attendanceController.adminCorrectAttendance);
-router.get('/admin/attendance/export', protect, adminOnly, attendanceController.exportAttendanceData);
 
 // =================== Leave Routes ==================== 
 // Employee routes
