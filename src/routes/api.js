@@ -15,7 +15,7 @@ const profileController = require('../controller/profileController');
 const reportController = require('../controller/reportController');  
 const upload = require('../middleware/multer');  
 const { protect, adminOnly } = require("../middleware/AuthVerifyMiddleWare"); 
-
+const SendEmailUtility = require('../utility/SendEmailUtility');
 // =================== Login Routes ====================
 router.post("/admin/login", userController.adminLogin);  
 router.post("/users/userLogin", userController.userLogin);  
@@ -67,110 +67,172 @@ router.delete(
 );
 
 // routes/admin.js
-router.post('/send-welcome-email', protect, adminOnly, async (req, res) => {
-  try {
-    const { 
-      to, 
-      subject, 
-      userName, 
-      userEmail, 
-      password, 
-      role, 
-      department,
-      joiningDate,
-      salary,
-      loginUrl 
-    } = req.body;
+router.post('/send-welcome-email', async (req, res) => {
+    try {
+        console.log('📧 Welcome email API called:', req.body);
+        
+        const {
+            to,
+            subject,
+            userName,
+            userEmail,
+            password,
+            role,
+            department,
+            joiningDate,
+            salary,
+            loginUrl
+        } = req.body;
 
-    // Email content তৈরি করুন
-    const emailContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .credentials { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border: 2px dashed #667eea; }
-          .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>Welcome to Attendance System!</h1>
-          </div>
-          <div class="content">
-            <h2>Hello ${userName},</h2>
-            <p>Your account has been successfully created in our Attendance Management System.</p>
-            
-            <div class="credentials">
-              <h3>Your Login Credentials:</h3>
-              <p><strong>Email:</strong> ${userEmail}</p>
-              <p><strong>Password:</strong> ${password}</p>
-              <p><strong>Login URL:</strong> <a href="${loginUrl}">${loginUrl}</a></p>
-            </div>
-            
-            <h3>Account Details:</h3>
-            <ul>
-              <li><strong>Role:</strong> ${role}</li>
-              <li><strong>Department:</strong> ${department}</li>
-              <li><strong>Joining Date:</strong> ${joiningDate}</li>
-              <li><strong>Salary:</strong> ৳${salary}/month</li>
-            </ul>
-            
-            <p><strong>Important Security Note:</strong></p>
-            <ul>
-              <li>Keep your password confidential</li>
-              <li>Login and change your password immediately</li>
-              <li>Do not share your credentials with anyone</li>
-            </ul>
-            
-            <p>If you have any questions, please contact your system administrator.</p>
-            
-            <p>Best regards,<br>
-            Attendance System Team</p>
-          </div>
-          <div class="footer">
-            <p>This is an automated message. Please do not reply to this email.</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
+        // Validation
+        if (!to || !userEmail || !password) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields'
+            });
+        }
 
-    // Email পাঠানোর লজিক (Nodemailer বা অন্য service ব্যবহার করুন)
-    const transporter = nodemailer.createTransport({
-      service: 'gmail', // অথবা আপনার SMTP settings
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
-    });
+        // Create email text content
+        const emailText = `
+            Welcome to Attendance System!
+            
+            Hello ${userName},
+            
+            Your account has been successfully created.
+            
+            ======== LOGIN CREDENTIALS ========
+            Email: ${userEmail}
+            Password: ${password}
+            Role: ${role}
+            Department: ${department}
+            
+            ======== ACCOUNT DETAILS ========
+            Joining Date: ${joiningDate}
+            Monthly Salary: ৳${salary}
+            
+            ======== IMPORTANT ========
+            1. Login URL: ${loginUrl}
+            2. Change your password after first login
+            3. Keep your credentials secure
+            
+            ======== CONTACT ========
+            If you face any issues, contact system administrator.
+            
+            Best regards,
+            A2IT HRM System
+            admin@attendance-system.a2itltd.com
+        `;
 
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: to,
-      subject: subject || 'Welcome to Attendance System - Your Account Credentials',
-      html: emailContent
-    };
+        // Create HTML content
+        const emailHTML = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                            color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                    .content { padding: 30px; background: #f9f9f9; }
+                    .credentials { background: white; border: 2px dashed #667eea; 
+                                padding: 20px; margin: 20px 0; border-radius: 8px; }
+                    .button { display: inline-block; background: #667eea; 
+                            color: white; padding: 12px 30px; text-decoration: none; 
+                            border-radius: 5px; margin: 15px 0; }
+                    .footer { text-align: center; padding: 20px; color: #666; 
+                            font-size: 12px; border-top: 1px solid #eee; }
+                    .info-item { margin: 10px 0; padding: 8px; background: #f8f9fa; border-radius: 5px; }
+                    .warning { background: #fff3cd; border-left: 4px solid #ffc107; 
+                            padding: 10px; margin: 15px 0; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>Welcome to Attendance System! 🎉</h1>
+                        <p>A2IT HRM Portal</p>
+                    </div>
+                    
+                    <div class="content">
+                        <h2>Hello ${userName},</h2>
+                        <p>Your account has been successfully created in the A2IT Attendance System.</p>
+                        
+                        <div class="credentials">
+                            <h3>🔐 Your Login Credentials</h3>
+                            <div class="info-item">
+                                <strong>📧 Email:</strong> ${userEmail}
+                            </div>
+                            <div class="info-item">
+                                <strong>🔑 Password:</strong> <code style="background: #e9ecef; padding: 3px 8px; border-radius: 3px;">${password}</code>
+                            </div>
+                            <div class="info-item">
+                                <strong>👤 Role:</strong> ${role}
+                            </div>
+                            <div class="info-item">
+                                <strong>🏢 Department:</strong> ${department}
+                            </div>
+                        </div>
+                        
+                        <div class="warning">
+                            <strong>⚠️ Security Notice:</strong><br>
+                            For security reasons, please change your password immediately after first login.
+                        </div>
+                        
+                        <a href="${loginUrl}" class="button">🚀 Login to System Now</a>
+                        
+                        <p><strong>🔗 Direct Login Link:</strong><br>
+                        <a href="${loginUrl}">${loginUrl}</a></p>
+                        
+                        <hr>
+                        
+                        <h3>📋 Account Information</h3>
+                        <div class="info-item">
+                            <strong>📅 Joining Date:</strong> ${joiningDate}
+                        </div>
+                        <div class="info-item">
+                            <strong>💰 Monthly Salary:</strong> ৳${salary}
+                        </div>
+                        <div class="info-item">
+                            <strong>🏛️ Department:</strong> ${department}
+                        </div>
+                        
+                        <div style="margin-top: 30px; padding: 15px; background: #e7f3ff; border-radius: 8px;">
+                            <h4>📞 Need Help?</h4>
+                            <p>If you encounter any issues, please contact:</p>
+                            <p><strong>System Administrator</strong><br>
+                            Email: admin@attendance-system.a2itltd.com</p>
+                        </div>
+                    </div>
+                    
+                    <div class="footer">
+                        <p>This is an automated email from A2IT HRM System.</p>
+                        <p>Please do not reply to this message.</p>
+                        <p>© ${new Date().getFullYear()} A2IT Ltd. All rights reserved.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
 
-    await transporter.sendMail(mailOptions);
+        // Send email using your existing utility
+        await SendEmailUtility(to, subject || 'Welcome to A2IT HRM System', emailText);
+        
+        console.log('✅ Welcome email sent to:', to);
+        
+        return res.json({
+            success: true,
+            message: 'Welcome email sent successfully',
+            email: to
+        });
 
-    res.status(200).json({
-      status: 'success',
-      message: 'Welcome email sent successfully',
-      data: { to: to }
-    });
-  } catch (error) {
-    console.error('Error sending welcome email:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to send welcome email',
-      error: error.message
-    });
-  }
+    } catch (error) {
+        console.error('❌ Welcome email error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to send welcome email',
+            error: error.message
+        });
+    }
 });
 
 // ===================== EMPLOYEE ROUTES (Require authentication) ===================== 
